@@ -2,7 +2,9 @@ import os
 import understand
 import Function_Analyzer_Helper
 
-UND_PATH = "/Users/adelinemoll/Documents/LLM/LangChain/SCpp/SCpp.und"
+# UND_PATH = "/Users/adelinemoll/Documents/LLM/LangChain/SCpp/SCpp.und" # Mac Path
+UND_PATH = "/home/adelinemoll/Public/LLM/LangChain/SCpp/SCpp.und" # Linux Path
+REPO_PATH = "/home/adelinemoll/Public/LLM/LangChain/SCpp" # Linux Path
 
 def capture_files(db):
     file_list = []

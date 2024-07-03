@@ -1,0 +1,67 @@
+scpp::SCvxAlgorithm::SCvxAlgorithm
+
+    Summary: This constructor for the SCvxAlgorithm class initializes an instance of the class using a given model. It loads parameters and reserves memory for the algorithm's trajectory history.
+
+scpp::SCvxAlgorithm::getAllSolutions
+
+    The given C++ function named "getAllSolutions" saves all trajectories obtained from a simulation algorithm into a vector of structures called "trajectory_data_t". Afterwards, it copies all these trajectory data into another vector, which is also passed as an argument. 
+    The purpose of this copying action is to store the nondimensionalized versions of the original trajectories, where "nondimensionalize" is a boolean flag used for this purpose. If this flag is set to true, then the copying and subsequent nondimensionalization of trajectory data will be done inside this function. Otherwise, it will simply transfer all the original trajectory data as it is.
+    The "model" class or object that can perform nondimensionalization on given trajectory data is assumed to be available in the code, and is not explicitly discussed here. It's just mentioned as a prerequisite for this function's functionality. 
+    Note that this function returns nothing, implying that its main effect is to modify its arguments instead of returning an output.
+
+scpp::SCvxAlgorithm::getNonlinearCost
+
+    Answer: 
+    The presented C++ code belongs to a class called SCvxAlgorithm that calculates the nonlinear cost of a given trajectory. To do so, it iterates over all but the last state and input values, interpolating if necessary, and simulates the model between those points with the given inputs. The difference between the actual and predicted state at the second point is calculated using L1-norm and added to the accumulated nonlinear cost of dynamics. At the end, the computed value is returned.
+
+scpp::SCvxAlgorithm::getSolution
+
+    This function, getSolution(), returns a trajectory_data_t object, which contains information about the solution to a given problem. The solution is stored in the private data member td of this SCvxAlgorithm class. To return the solution, we simply pass a trajectory_data_t reference by const reference into this function. This function is used to retrieve the solution once it has been computed using the optimization algorithm implemented in this class.
+
+scpp::SCvxAlgorithm::initialize
+
+    The code initializes a model and solves an SCvx problem using cvxopt. It computes dynamics by calling initializeModel() on the model object. The dd and td objects are initialized for DD and TD respectively. Socp is built with buildSCvxProblem(). Model constraints are added to socp, and a unique pointer solver is created from ecossolver. The time taken for dynamics is also measured using cvxopt's tic() and toc() functions. 
+    This code is part of an SCvx algorithm implementation, and the provided function initialize() sets up the necessary objects for SCvx optimization.
+
+scpp::SCvxAlgorithm::iterate
+
+   This C++ program implements a trust region method to solve nonlinear optimization problems with equality and inequality constraints using an interior point solver (IPOPT). The program first discretizes the problem using multiple shooting, then iteratively solves the resulting linear program using IPOPT while comparing the cost function evaluated by the original, constrained dynamical system to the linear approximation. If convergence is reached within a specified threshold, the final solution is accepted and outputted. Trust region radius adaptation is performed based on a ratio of actual and predicted changes in the cost function at each iteration.
+
+scpp::SCvxAlgorithm::loadParameters
+
+    The presented C++ code is part of a larger framework for modeling and simulation. It loads parameters from a ParameterServer object to initialise the variables of an optimisation algorithm for the SCvx control scheme. Specifically, it reads scalar values stored in the file "SCvx.info" located in the parameter folder associated with a model object. The K value is assigned, and nondimensionalisation is set. Parameters for maximum iterations, alpha, beta, initial and final rho values, change threshold, weight of virtual control, trust region, and whether to interpolate input are also loaded. 
+
+
+scpp::SCvxAlgorithm::readSolution
+
+    This function is called 'readSolution' and it reads values of matrix X and U from the solver to store them into 'td' class variables. The 'socp' class is used as a wrapper for the solver, which is probably an optimization solver. 'X' and 'U' are matrices with dimensions depending on the problem at hand. Each column of matrix X represents decision variables in this case, while each column of matrix U stores slack variables. The function uses the 'getVariableValue()' method to read values from 'socp'. Then, it copies these values into corresponding columns of matrices X and U stored inside the 'td' object.
+
+scpp::SCvxAlgorithm::solve
+
+    The provided C++ code initializes a model and solves it using a specified algorithm (SCvxAlgorithm). It performs nondimensionalization and normalizes trajectories where necessary. The function iterate() is called repeatedly until a specified maximum number of iterations has been exceeded or convergence has been reached. The solution process is time-recorded, and the solution is saved at certain points along with the solution path as a whole. If a warm start is requested, parameters are loaded from disk, and a trajectory is initialized using the last computed state. The function loadParameters() is called to perform this operation.
+   
+   
+
+scpp::buildSCvxProblem
+
+    Here is an example to follow.
+
+    Summary: This C++ function takes four arguments, builds a convex optimization problem using CVXOPT, and returns a shared pointer to the resulting object. The optimization problem minimizes a weighted virtual control norm while satisfying trust region constraints for input values and nonlinear equality constraints based on a discretized model. Virtual control is bounded by an upper bound term represented by a variable nu_bound, and a lower bound of zero. The function also checks that the sum of these bounds does not exceed the virtual control norm, which in turn is minimized.
+
+
+scpp::discretization::exactLinearDiscretization
+
+    Summary: The function named exactLinearDiscretization takes a model, time step value, and initial state and input as arguments. It computes Jacobians of the model, its derivatives with respect to both the state and inputs at that point in time. Then it creates two matrices representing the coefficients of the linear approximation for the states and inputs respectively, at the given time step. Finally, it calculates the exponential matrix using the computed matrices and the time step. The function returns the matrix representing the coefficients of the linear approximation for the states at the given point in time, and a vector representing the coefficients of the linear approximation for the inputs at that point in time.
+
+scpp::discretization::multipleShooting
+
+    Here's one possible answer:
+    
+    This function implements multiple shooting, a numerical method for solving ordinary differential equations (ODEs), using either interpolated input and/or variable time steps. The model, trajectory data, and discretization data are input arguments. The code consists of multiple calls to the template function multipleShootingImplementation(), which itself has four overloads depending on whether input is interpolated and time steps are constant or variable.
+
+    More specifically, if neither input interpolation nor variable time steps are used, then the standard multiple shooting method is implemented (first call). If input interpolation is used but time steps remain constant, then a modified version of multiple shooting, known as "multiple shooting with interpolated initial conditions," is carried out (second call). In the third call, input interpolation is combined with variable time steps. The fourth overload combines both techniques.
+
+    The implementation assumes that discretization data contains information about the numerical method to be used. Specifically, dd.interpolatedInput() returns true if input is interpolated; otherwise false. Dd.variableTime() does likewise for time steps.
+    
+    Here's another possible
+
