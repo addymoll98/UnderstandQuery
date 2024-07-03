@@ -1,0 +1,2746 @@
+scpp::reduce_vector
+template <typename T>
+std::vector<T> reduce_vector(const std::vector<T> &v, size_t steps)
+{
+    const size_t size = v.size();
+
+    std::vector<T> new_vector;
+
+    for (size_t i = 0; i < steps; i++)
+    {
+        const size_t index = size_t(size / steps * i);
+        new_vector.push_back(v.at(index));
+    }
+    return new_vector;
+}
+
+The function `reduce_vector` takes a constant reference to a vector of type `T` and a step size `steps`. It returns a new vector containing the elements of the original vector that are selected based on the step size. The function first calculates the size of the original vector and creates an empty vector to store the selected elements. It then iterates `steps` times, calculating the index of the current element using the formula `index = size / steps * i`, and adding it to the new vector. The function returns the new vector containing the selected elements. This function can be useful for reducing the size of a large vector by selecting only a subset of its elements.
+
+scpp::expMovingAverage
+double expMovingAverage(double previousAverage, double period, double newValue)
+{
+    const double factor = 2. / (period + 1.);
+    const double result = (newValue - previousAverage) * factor + previousAverage;
+    return result;
+}
+
+The function `expMovingAverage` is a moving average algorithm that uses an exponential smoothing factor. It takes three arguments: the previous average, the period (number of values used in the average), and the new value. The function returns the updated average using the formula `(newValue - previousAverage) * factor + previousAverage`, where `factor` is a constant calculated as `2 / (period + 1)`. This function is commonly used in time series analysis to smooth out fluctuations in data over time.
+
+scpp::getAccelerationRotatingFrame
+std::vector<Eigen::Vector3d> getAccelerationRotatingFrame(const trajectory_data_t &td,
+                                                          const Eigen::Vector3d offset,
+                                                          const double g)
+{
+    Model::state_vector_v_t X = td.X;
+    X.push_back(X.back());
+
+    // calculate accelerations
+    std::vector<Eigen::Vector3d> acc_passenger_b;
+    const double dt = td.t / (X.size() - 1);
+
+    for (size_t k = 0; k < X.size() - 1; k++)
+    {
+        const Eigen::Vector3d r_p_b = offset;
+        const Eigen::Vector3d v0 = X.at(k).segment<3>(4);
+        const Eigen::Vector3d v1 = X.at(k + 1).segment<3>(4);
+
+        // Eigen::Quaterniond q0;
+        // q0.w() = X.at(k)(7);
+        // q0.vec() << X.at(k).segment<3>(8);
+        // q0.normalize();
+        // Eigen::Quaterniond q1;
+        // q1.w() = X.at(k + 1)(7);
+        // q1.vec() << X.at(k + 1).segment<3>(8);
+        // q1.normalize();
+        // const Eigen::Quaterniond q = q0.slerp(0.5, q1);
+
+        const Eigen::Vector3d w0 = X.at(k).segment<3>(11);
+        const Eigen::Vector3d w1 = X.at(k + 1).segment<3>(11);
+        const Eigen::Vector3d w_b = (w1 - w0) / 2;
+
+        const Eigen::Vector3d dw_b = (w1 - w0) / dt;
+        const Eigen::Vector3d dv_i = (v1 - v0) / dt;
+
+        const Eigen::Vector3d a_coriolis(0., 0., 0.); // r_p_b is constant
+        const Eigen::Vector3d a_centrifugal = -w_b.cross(w_b.cross(r_p_b));
+        const Eigen::Vector3d a_euler = -dw_b.cross(r_p_b);
+        const Eigen::Vector3d a_imp = dv_i + Eigen::Vector3d(0., 0., g);
+
+        acc_passenger_b.push_back(a_imp + a_centrifugal + a_coriolis + a_euler);
+    }
+    return acc_passenger_b;
+}
+
+The function `getAccelerationRotatingFrame` takes a `trajectory_data_t` object and a vector offset as input, along with the gravitational acceleration `g`. It returns a vector of accelerations in the rotating frame of reference. The function first creates a state vector containing the last two states of the trajectory. It then calculates the accelerations using the velocity and position vectors of the last two states, as well as the angular velocities and positions. The function uses the slerp method to calculate the quaternion between the two states, but this implementation is commented out and replaced with the angular velocities. The function calculates the Coriolis, centrifugal, Euler, and impulse accelerations, and returns the total acceleration in the rotating frame.
+
+scpp::getTimeString
+std::string getTimeString(){
+    using sc = std::chrono::system_clock ;
+    std::time_t t = sc::to_time_t(sc::now());
+    char buf[20];
+    std::strftime(buf, 20, "%Y_%m_%d_%H_%M_%S", std::localtime(&t));
+    return std::string(buf);
+}    
+
+The code presented generates a string representing the current date and time in the format "YYYY_MM_DD_HH_MM_SS". It does this by converting the current system time to a time_t value, formatting it using strftime, and returning the resulting string. This function can be used to generate unique filenames or log entries based on the current time.
+
+scpp::interpolatedInput
+Model::input_vector_t interpolatedInput(const Model::input_vector_v_t &U, double t,
+                                        double total_time, bool first_order_hold)
+{
+    const size_t K = U.size();
+    const double time_step = total_time / (K - 1);
+    const size_t i = std::min(size_t(t / time_step), K - 2);
+    const Model::input_vector_t u0 = U.at(i);
+    const Model::input_vector_t u1 = first_order_hold ? U.at(i + 1) : u0;
+
+    const double t_intermediate = std::fmod(t, time_step) / time_step;
+    const Model::input_vector_t u = u0 + (u1 - u0) * t_intermediate;
+
+    return u;
+}
+
+The function `interpolatedInput` takes as input a vector of input vectors `U` and a time `t` between 0 and the total simulation time `total_time`. It returns an interpolated input vector at time `t` using either first-order hold or linear interpolation between two adjacent input vectors in `U`. The function first calculates the index `i` of the nearest input vector to `t`, then calculates the input vectors `u0` and `u1` at indices `i` and `i+1`, respectively. If `first_order_hold` is true, `u1` is used as the input vector at time `t`. Otherwise, linear interpolation is performed using the time fraction `t_intermediate` between `i` and `i+1`. The resulting interpolated input vector is returned.
+
+scpp::DiscretizationData::initialize
+template<class Model>
+void DiscretizationData<Model>::initialize(size_t K, bool interpolate_input, bool free_final_time)
+{
+    A.resize(K - 1);
+
+    B.resize(K - 1);
+
+    if (interpolate_input)
+    {
+        C.resize(K - 1);
+    }
+    else
+    {
+        C.clear();
+    }
+
+    if (free_final_time)
+    {
+        s.resize(K - 1);
+    }
+    else
+    {
+        s.clear();
+    }
+
+    z.resize(K - 1);
+}
+
+The code initializes the DiscretizationData class for a given model with a specified number of time steps (K). It creates matrices A, B, and C, and vectors s and z, depending on whether input interpolation and free final time are required, respectively. The code does not specify any other functions or classes, but it is likely that these matrices and vectors will be used in a larger context to perform numerical methods for solving differential equations.
+
+scpp::DiscretizationData::interpolatedInput
+template<class Model>
+bool DiscretizationData<Model>::interpolatedInput() const
+{
+    return not C.empty();
+}    
+
+The code above is a member function of the DiscretizationData class template for models. It returns a boolean value indicating whether the input data is interpolated or not. This is determined by checking if the C member variable is empty. The C variable is used to store interpolated data points. If it is empty, then the input data is not interpolated. This function can be used to differentiate between discretized and interpolated input data for models.
+
+scpp::DiscretizationData::n_U
+template<class Model>
+size_t DiscretizationData<Model>::n_U() const
+{
+    return B.size();
+}    
+
+The code above is a part of the DiscretizationData class template in C++. It provides a method named n_U() const that returns the size of the B vector, which represents the discrete unknowns in a finite element method. This method is a constant member function, meaning it does not modify the object's state. The B vector is a result of the discretization process, which approximates the solution of a partial differential equation using finite elements. The DiscretizationData class is likely used to store data related to the discretization process, such as the B vector and other necessary information for solving the PDE.
+
+scpp::DiscretizationData::n_X
+template<class Model>
+size_t DiscretizationData<Model>::n_X() const
+{
+    return A.size();
+}    
+
+The code above is a part of the DiscretizationData class template in C++. It provides a method called n_X() which returns the size of the discretization grid X. This grid is represented by the matrix A, which is a member variable of the DiscretizationData class. The size of A is returned by the size() function, which is a member function of the std::vector container used to store A. The DiscretizationData class is a template class that is parameterized by the Model type, which is a class representing the mathematical model being solved. This method can be used to obtain the number of points in the discretization grid, which is required for various computations in numerical methods.
+
+scpp::DiscretizationData::variableTime
+template<class Model>
+bool DiscretizationData<Model>::variableTime() const
+{
+    return not s.empty();
+}    
+
+The code above defines a template class called DiscretizationData for a model. It has a boolean function called variableTime() which returns true if the discretization data contains a non-empty list of time points. This indicates that the discretization is time-dependent. The list of time points is stored in a member variable called s.
+
+scpp::discretization::ODE::ODE
+    ODE(const Model::input_vector_t &u_t0,
+        const Model::input_vector_t &u_t1,
+        const double &time,
+        double dt,
+        Model::ptr_t model)
+        : u_t0(u_t0), u_t1(u_t1), time(time), dt(dt), model(model) {}    
+
+The constructor of the ODE class takes in input vectors u_t0 and u_t1, a double representing the current time, a double representing the time step, and a pointer to the Model class as arguments. It initializes the member variables with these values.
+
+scpp::discretization::ODE::operator()
+template <bool INTERPOLATE_INPUT, bool VARIABLE_TIME>
+void ODE<INTERPOLATE_INPUT, VARIABLE_TIME>::operator()(const ode_matrix_t &V, ode_matrix_t &dVdt, const double t)
+{
+    const Model::state_vector_t x = V.col(0);
+
+    Model::input_vector_t u;
+    if constexpr (INTERPOLATE_INPUT)
+    {
+        u = u_t0 + t / dt * (u_t1 - u_t0);
+    }
+    else
+    {
+        u = u_t0;
+    }
+
+    Model::state_vector_t f;
+    Model::state_matrix_t A;
+    Model::control_matrix_t B;
+    model->computef(x, u, f);
+    model->computeJacobians(x, u, A, B);
+
+    if constexpr (VARIABLE_TIME)
+    {
+        A *= time;
+        B *= time;
+    }
+
+    const Model::state_matrix_t Phi_A_xi = V.template block<Model::state_dim, Model::state_dim>(0, 1);
+    const Model::state_matrix_t Phi_A_xi_inverse = Phi_A_xi.inverse();
+
+    size_t cols = 0;
+
+    // state
+    if constexpr (VARIABLE_TIME)
+    {
+        dVdt.template block<Model::state_dim, 1>(0, cols) = time * f;
+    }
+    else
+    {
+        dVdt.template block<Model::state_dim, 1>(0, cols) = f;
+    }
+    cols += 1;
+
+    // A
+    dVdt.template block<Model::state_dim, Model::state_dim>(0, cols).noalias() = A * Phi_A_xi;
+    cols += Model::state_dim;
+
+    if constexpr (INTERPOLATE_INPUT)
+    {
+        // B
+        const double alpha = (dt - t) / dt;
+        dVdt.template block<Model::state_dim, Model::input_dim>(0, cols).noalias() = Phi_A_xi_inverse * B * alpha;
+        cols += Model::input_dim;
+
+        // C
+        const double beta = t / dt;
+        dVdt.template block<Model::state_dim, Model::input_dim>(0, cols).noalias() = Phi_A_xi_inverse * B * beta;
+        cols += Model::input_dim;
+    }
+    else
+    {
+        // B
+        dVdt.template block<Model::state_dim, Model::input_dim>(0, cols).noalias() = Phi_A_xi_inverse * B;
+        cols += Model::input_dim;
+    }
+
+    if constexpr (VARIABLE_TIME)
+    {
+        // s
+        dVdt.template block<Model::state_dim, 1>(0, cols).noalias() = Phi_A_xi_inverse * f;
+        cols += 1;
+        // z
+        dVdt.template block<Model::state_dim, 1>(0, cols).noalias() = Phi_A_xi_inverse * (-A * x - B * u);
+        cols += 1;
+    }
+    else
+    {
+        // z
+        dVdt.template block<Model::state_dim, 1>(0, cols).noalias() = Phi_A_xi_inverse * (f - A * x - B * u);
+        cols += 1;
+    }
+
+    assert(cols == ode_matrix_t::ColsAtCompileTime);
+}    
+
+The code defines an ODE solver for a dynamical system represented by a differential equation. It takes as input a matrix V containing the state variables and their derivatives at a given time t, and outputs the derivative of V with respect to time. The solver supports interpolation of input signals and variable time steps. The solver uses the provided model to compute the right-hand side function f and its Jacobian matrices A and B. The solver also computes the inverse of a matrix Phi_A_xi, which is used to transform the derivative of the state variables into the derivative of the matrix V. The solver then populates the derivative matrix dVdt with the computed derivatives, following a specific order based on the chosen options. The solver ensures that the number of columns in dVdt matches the expected value.
+
+scpp::discretization::multipleShootingImplementation
+template <bool INTERPOLATE_INPUT, bool VARIABLE_TIME>
+void multipleShootingImplementation(
+    Model::ptr_t model,
+    trajectory_data_t &td,
+    discretization_data_t &dd)
+{
+    const size_t K = td.n_X();
+
+    using ODEFun = ODE<INTERPOLATE_INPUT, VARIABLE_TIME>;
+    using ode_matrix_t = typename ODEFun::ode_matrix_t;
+
+    double dt = 1. / double(K - 1);
+
+    if constexpr (not VARIABLE_TIME)
+    {
+        dt *= td.t;
+    }
+
+    using namespace boost::numeric::odeint;
+    runge_kutta_fehlberg78<ode_matrix_t, double, ode_matrix_t, double, vector_space_algebra> stepper;
+
+    for (size_t k = 0; k < K - 1; k++)
+    {
+        ode_matrix_t V;
+        V.col(0) = td.X.at(k);
+        V.template block<Model::state_dim, Model::state_dim>(0, 1).setIdentity();
+        V.template rightCols<ode_matrix_t::ColsAtCompileTime - 1 - Model::state_dim>().setZero();
+
+        const Model::input_vector_t u0 = td.U[k];
+        const Model::input_vector_t u1 = INTERPOLATE_INPUT ? td.U[k + 1] : u0;
+        ODEFun odeMultipleShooting(u0, u1, td.t, dt, model);
+
+        integrate_adaptive(stepper, odeMultipleShooting, V, 0., dt, dt / 5.);
+
+        size_t cols = 1;
+
+        dd.A[k] = V.template block<Model::state_dim, Model::state_dim>(0, cols);
+        cols += Model::state_dim;
+
+        dd.B[k].noalias() = dd.A[k] * V.template block<Model::state_dim, Model::input_dim>(0, cols);
+        cols += Model::input_dim;
+
+        if constexpr (INTERPOLATE_INPUT)
+        {
+            dd.C[k].noalias() = dd.A[k] * V.template block<Model::state_dim, Model::input_dim>(0, cols);
+            cols += Model::input_dim;
+        }
+
+        if constexpr (VARIABLE_TIME)
+        {
+            dd.s[k].noalias() = dd.A[k] * V.template block<Model::state_dim, 1>(0, cols);
+            cols += 1;
+        }
+
+        dd.z[k].noalias() = dd.A[k] * V.template block<Model::state_dim, 1>(0, cols);
+        cols += 1;
+
+        assert(cols == ode_matrix_t::ColsAtCompileTime);
+    }
+}    
+
+The code implements the multiple shooting method for solving ordinary differential equations (ODEs) using the Boost library's odeint module. It takes as input a model, trajectory data, and discretization data, and generates the required matrices for the discrete-time model. The method is applicable for both interpolated and non-interpolated inputs, and variable or fixed time steps. The code uses a Runge-Kutta-Fehlberg 7(8) method for numerical integration, and performs adaptive step size control. The generated matrices are stored in the discretization data structure for further use in model predictive control.
+
+scpp::SystemDynamics::computeJacobians
+template <size_t STATE_DIM, size_t INPUT_DIM, size_t PARAM_DIM>
+void SystemDynamics<STATE_DIM, INPUT_DIM, PARAM_DIM>::computeJacobians(const state_vector_t &x,
+                                                                       const input_vector_t &u,
+                                                                       state_matrix_t &A,
+                                                                       control_matrix_t &B)
+{
+    assert(initialized and parameters_set);
+
+#if CODEGEN
+    dynamic_vector_t input(STATE_DIM + INPUT_DIM + PARAM_DIM);
+    input << x, u, current_parameters;
+
+    using full_jacobian_t = Eigen::Matrix<double, STATE_DIM, STATE_DIM + INPUT_DIM + PARAM_DIM, Eigen::RowMajor>;
+    full_jacobian_t J;
+
+    CppAD::cg::ArrayView<const double> input_view(input.data(), input.size());
+    CppAD::cg::ArrayView<double> J_view(J.data(), J.size());
+
+    model->Jacobian(input_view, J_view);
+#else
+    dynamic_vector_t input(STATE_DIM + INPUT_DIM);
+    input << x, u;
+    Eigen::Matrix<double, STATE_DIM, STATE_DIM + INPUT_DIM, Eigen::RowMajor> J;
+    dynamic_vector_map_t J_map(J.data(), J.size());
+
+    J_map << f_.Jacobian(input);
+#endif
+
+    A = J.template block<STATE_DIM, STATE_DIM>(0, 0);
+    B = J.template block<STATE_DIM, INPUT_DIM>(0, STATE_DIM);
+}    
+
+The code implements a SystemDynamics class template for computing Jacobians of a dynamical system. It takes three template arguments: STATE_DIM, INPUT_DIM, and PARAM_DIM. The function computeJacobians computes the Jacobian matrices A and B using the CppAD library. The function takes as input the current state x, input u, and parameters, and returns the Jacobian matrices A and B. The function uses dynamic_vector and dynamic_vector_map classes from Eigen library for memory management. The function also uses the CppAD::cg::ArrayView class for passing arrays to CppAD functions. The function assumes that the model object has a Jacobian function, which is called by the CppAD library. The function also assumes that the SystemDynamics object is initialized and parameters are set before calling this function.
+
+scpp::SystemDynamics::computef
+template <size_t STATE_DIM, size_t INPUT_DIM, size_t PARAM_DIM>
+void SystemDynamics<STATE_DIM, INPUT_DIM, PARAM_DIM>::computef(const state_vector_t &x,
+                                                               const input_vector_t &u,
+                                                               state_vector_t &f)
+{
+    assert(initialized and parameters_set);
+
+#if CODEGEN
+    dynamic_vector_t input(STATE_DIM + INPUT_DIM + PARAM_DIM);
+    input << x, u, current_parameters;
+
+    CppAD::cg::ArrayView<const double> input_view(input.data(), input.size());
+    CppAD::cg::ArrayView<double> f_view(f.data(), f.size());
+
+    model->ForwardZero(input_view, f_view);
+#else
+    dynamic_vector_t input(STATE_DIM + INPUT_DIM);
+    input << x, u;
+    dynamic_vector_map_t f_map(f.data(), STATE_DIM);
+
+    f_map << f_.Forward(0, input);
+#endif
+}    
+
+This function, SystemDynamics::computef, calculates the derivative of the state vector using the given input vector and current parameters. It first checks if the system is initialized and parameters are set. Then, it creates a dynamic vector containing the state vector, input vector, and current parameters. For CODEGEN, it passes this dynamic vector to the forward function of the model, which returns the derivative of the state vector. For non-CODEGEN, it creates a dynamic vector containing only the state vector and input vector, and passes it to the Forward function of the model, which returns a map containing the derivative of each state variable. The derivative values are then stored in the output vector, f.
+
+scpp::SystemDynamics::initializeModel
+template <size_t STATE_DIM, size_t INPUT_DIM, size_t PARAM_DIM>
+void SystemDynamics<STATE_DIM, INPUT_DIM, PARAM_DIM>::initializeModel()
+{
+    if (initialized)
+    {
+        return;
+    }
+
+#if CODEGEN
+    dynamic_vector_ad_t x(STATE_DIM + INPUT_DIM + PARAM_DIM);
+    x.setRandom();
+    CppAD::Independent(x, 0, false);
+
+    const state_vector_ad_t &state = x.segment<STATE_DIM>(0);
+    const input_vector_ad_t &input = x.segment<INPUT_DIM>(STATE_DIM);
+    const param_vector_ad_t &param = x.segment<PARAM_DIM>(STATE_DIM + INPUT_DIM);
+
+    state_vector_ad_t dx;
+    systemFlowMap(state, input, param, dx);
+
+    f_ = CppAD::ADFun<scalar_t>(x, dynamic_vector_ad_t(dx));
+    f_.optimize();
+
+    CppAD::cg::ModelCSourceGen<double> cgen(f_, "model");
+    cgen.setCreateForwardZero(true);
+    cgen.setCreateJacobian(true);
+    CppAD::cg::ModelLibraryCSourceGen<double> libcgen(cgen);
+
+    // compile source code
+    CppAD::cg::DynamicModelLibraryProcessor<double> p(libcgen);
+
+    CppAD::cg::GccCompiler<double> compiler;
+    compiler.addCompileFlag("-O3");
+    dynamicLib = p.createDynamicLibrary(compiler);
+
+    model = dynamicLib->model("model");
+#else
+    CppAD::thread_alloc::hold_memory(true);
+
+    dynamic_vector_ad_t x(STATE_DIM + INPUT_DIM);
+    dynamic_vector_ad_t param(PARAM_DIM);
+    x.setOnes();
+    param.setOnes();
+
+    // start recording
+    CppAD::Independent(x, 0, false, param);
+
+    const state_vector_ad_t &state = x.head<STATE_DIM>();
+    const input_vector_ad_t &input = x.tail<INPUT_DIM>();
+
+    state_vector_ad_t dx;
+    systemFlowMap(state, input, param, dx);
+
+    // store operation sequence in x' = f(x) and stop recording
+    f_ = CppAD::ADFun<scalar_t>(x, dynamic_vector_ad_t(dx));
+    f_.optimize();
+#endif
+
+    initialized = true;
+}    
+
+The code presented initializes a SystemDynamics model with specified dimensions for state, input, and parameter variables. It uses CppAD to generate a dynamic library containing a compiled version of the model's equations, which can be called using the generated library's model function. The code also optimizes the ADFun representing the model's equations and sets up a CppAD compiler and processor to generate the library. The code assumes the use of CODEGEN or thread_alloc::hold_memory(true) for memory allocation.
+
+scpp::SystemDynamics::updateModelParameters
+template <size_t STATE_DIM, size_t INPUT_DIM, size_t PARAM_DIM>
+void SystemDynamics<STATE_DIM, INPUT_DIM, PARAM_DIM>::updateModelParameters(param_vector_t param)
+{
+#if CODEGEN
+    current_parameters = param;
+#else
+    f_.new_dynamic(dynamic_vector_t(param));
+#endif
+    parameters_set = true;
+}    
+
+The code above updates the model parameters of a SystemDynamics object with a given parameter vector. It uses a template to specify the dimensions of the state, input, and parameter vectors. The update is performed by either setting the current parameters directly (in CodeGen mode) or creating a new dynamic vector with the new parameters (in non-CodeGen mode). The parameters_set flag is set to true to indicate that the parameters have been updated. This function is likely used to adjust the behavior of a dynamical system based on external inputs or other factors.
+
+scpp::SystemModel::SystemModel
+    SystemModel(){};    
+
+The SystemModel class is an empty constructor in C++. It does not have any dependencies, functions, or classes associated with it. This class can be used as a base for creating more complex models in future implementations. As of now, it serves as a placeholder for further development.
+
+scpp::SystemModel::addApplicationConstraints
+    virtual void addApplicationConstraints(std::shared_ptr<cvx::OptimizationProblem>,
+                                           state_vector_v_t &,
+                                           input_vector_v_t &){};    
+
+The code presented defines an abstract method named 'addApplicationConstraints' which is a part of the cvx library. This method takes two arguments, a shared pointer to an OptimizationProblem object and two vector variables, state_vector_v_t and input_vector_v_t. The method is used to add application-specific constraints to the optimization problem. The specific implementation of this method is left to the user, as it varies based on the application being optimized.
+
+scpp::SystemModel::getInitializedTrajectory
+    virtual void getInitializedTrajectory(trajectory_data_t &)
+    {
+        throw std::runtime_error("getInitializedTrajectory: This function has to be implemented by the derived class.");
+    };    
+
+The function `getInitializedTrajectory` is declared as a virtual function in an unspecified base class. It takes a reference to a `trajectory_data_t` object as its argument. In the derived class, this function should be implemented to return the initial trajectory data. If the function is called in the base class, a runtime error is thrown.
+
+scpp::SystemModel::getModelName
+    static const std::string getModelName()
+    {
+        return DERIVED::modelName;
+    };    
+
+The code presented defines a function named getModelName() that returns a string representing the name of the model. This function is a member of a derived class, which inherits from an unspecified base class named DERIVED. The model name is defined as a constant string within the DERIVED class, and is accessed through this function in the derived class. This function can be called to retrieve the name of the specific model instance being used.
+
+scpp::SystemModel::getNewModelParameters
+    virtual void getNewModelParameters(param_vector_t &){};    
+
+The code presented defines a virtual function named 'getNewModelParameters' that accepts a parameter vector as an argument. This function is not implemented in this code snippet and is left as a placeholder for future implementation.
+
+scpp::SystemModel::getOperatingPoint
+    virtual void getOperatingPoint(state_vector_t &, input_vector_t &)
+    {
+        throw std::runtime_error("getOperatingPoint: This function has to be implemented by the derived class.");
+    };    
+
+The function getOperatingPoint is declared as a virtual member function of an unspecified base class. It takes two arguments, state_vector_t and input_vector_t, and returns nothing. If this function is called, it throws a runtime error, indicating that the derived class must implement this function. This function is used to obtain the operating point of the system, which is the set of input and output values at which the system operates under specified conditions. The state vector and input vector are required as arguments to calculate the operating point.
+
+scpp::SystemModel::getParameterFolder
+    const std::string getParameterFolder() const
+    {
+        return param_folder_path + getModelName();
+    };    
+
+The function `getParameterFolder()` is a const member function of an unspecified class. It returns a string that combines the value of the `param_folder_path` member variable and the result of calling the `getModelName()` function. This string represents the path to a folder containing parameters for the current model. The `param_folder_path` member variable is not defined in this code snippet, but it can be assumed that it is a string containing the path to a directory where parameter files are stored. The `getModelName()` function is also not defined here, but it is likely that it returns a string representing the name of the current model. Overall, this function provides a way to construct a path to a folder containing parameters for the current model, based on the `param_folder_path` and `getModelName()` values.
+
+scpp::SystemModel::nondimensionalize
+    virtual void nondimensionalize()
+    {
+        throw std::runtime_error("nondimensionalize: This function has to be implemented by the derived class.");
+    };    
+
+The code presented is a virtual function named "nondimensionalize" that belongs to a base class. It throws a runtime error if the function is called without being overridden in the derived class. This function is used to convert physical units to non-dimensional quantities, which is a common technique in fluid dynamics simulations. The implementation of this function varies depending on the specific problem being solved, and it is the responsibility of the derived class to provide a customized version of this function.
+
+scpp::SystemModel::nondimensionalizeTrajectory
+    virtual void nondimensionalizeTrajectory(trajectory_data_t &)
+    {
+        throw std::runtime_error("nondimensionalizeTrajectory: This function has to be implemented by the derived class.");
+    };    
+
+The function `nondimensionalizeTrajectory` is declared as a virtual member function of an unspecified base class. It takes a reference to a `trajectory_data_t` object as an argument and throws a `std::runtime_error` exception if the function is not implemented in the derived class. This function is responsible for converting the dimensions of a trajectory data to non-dimensional form. The `trajectory_data_t` class is not defined in this code snippet, but it can be assumed that it contains data related to a trajectory.
+
+scpp::SystemModel::redimensionalize
+    virtual void redimensionalize()
+    {
+        throw std::runtime_error("redimensionalize: This function has to be implemented by the derived class.");
+    };    
+
+The code presented is a part of a virtual function in a derived class. It throws a runtime error if the function is not overridden in the derived class. This function is used for resizing the object, but since it is virtual, the specific implementation of resizing is left to the derived class. The function name is "redimensionalize" and it does not have any parameters.
+
+scpp::SystemModel::redimensionalizeTrajectory
+    virtual void redimensionalizeTrajectory(trajectory_data_t &)
+    {
+        throw std::runtime_error("redimensionalizeTrajectory: This function has to be implemented by the derived class.");
+    };    
+
+The function "redimensionalizeTrajectory" is declared as a virtual function in the base class. It takes a reference to a trajectory_data_t object as an argument and throws a runtime_error exception if the function is not overridden in the derived class. This function is used to resize the trajectory data based on new dimensions. The implementation of this function is left to the derived class.
+
+scpp::SystemModel::setParameterFolder
+    void setParameterFolder(const std::string &path)
+    {
+        param_folder_path = path;
+    };    
+
+The function setParameterFolder is being defined in this code snippet. It takes a string path as an argument and sets the value of the variable param_folder_path to this path. This variable is used to store the path to a folder containing parameters for the program. The function does not return any value.
+
+scpp::SystemModel::updateModelParameters
+    void updateModelParameters()
+    {
+        param_vector_t model_params;
+        getNewModelParameters(model_params);
+        BASE::updateModelParameters(model_params);
+    };    
+
+The code defines a function called 'updateModelParameters' that updates the parameters of a model. It first retrieves new parameter values using the 'getNewModelParameters' function, which is not defined in this code snippet. Then, it passes these new parameters to the 'BASE::updateModelParameters' function, which is presumably a base class for this class. This function updates the model's parameters based on the new values provided. This function does not return any value and does not take any arguments besides the new parameter vector.
+
+scpp::SystemModel::~SystemModel
+    virtual ~SystemModel(){};    
+
+The given C++ code defines a base class called SystemModel, which is a virtual destructor. This class does not have any member variables or functions defined, indicating that it serves as a base class for other classes to inherit from. The destructor is declared as virtual, which allows derived classes to override it if necessary. Overall, this code provides a basic structure for creating a system model in C++, but without any specific functionality implemented.
+
+scpp::TrajectoryData::approxStateAtTime
+template <class Model>
+typename Model::state_vector_t TrajectoryData<Model>::approxStateAtTime(double t) const
+{
+    t = std::clamp(t, 0., this->t);
+
+    if (t == this->t)
+    {
+        return X.back();
+    }
+
+    const double dt = this->t / (n_X() - 1);
+    double interpolate_value = std::fmod(t, dt) / dt;
+    const size_t i = t / dt;
+
+    const typename Model::state_vector_t x0 = X.at(i);
+    const typename Model::state_vector_t x1 = X.at(i + 1);
+
+    return x0 + interpolate_value * (x1 - x0);
+}    
+
+The function `approxStateAtTime` is a member function of the `TrajectoryData` class template for models. It returns an approximate state vector at a given time `t` using linear interpolation between the state vectors at the nearest two time points in the trajectory data. The function takes care of edge cases such as `t` being equal to the end time of the trajectory or outside the range of the trajectory data. The `TrajectoryData` class template stores a vector of state vectors and their corresponding times, and provides access to them through iterators and other functions. The `Model` class is a template parameter that represents the dynamic system being modeled, and has a `state_vector_t` type for its state vectors.
+
+scpp::TrajectoryData::initialize
+template <class Model>
+void TrajectoryData<Model>::initialize(size_t K, bool interpolate_input)
+{
+    X.resize(K);
+    U.resize(interpolate_input ? K : K - 1);
+    t = 0.;
+}    
+
+The function 'initialize' is defined for the 'TrajectoryData' template class with a generic model type 'Model'. It takes two arguments, 'K' and 'interpolate_input', and resizes the 'X' and 'U' member vectors accordingly. If 'interpolate_input' is true, 'U' will have 'K' elements, otherwise it will have 'K-1' elements. The initial time 't' is set to zero.
+
+scpp::TrajectoryData::inputAtTime
+template <class Model>
+typename Model::input_vector_t TrajectoryData<Model>::inputAtTime(double t) const
+{
+    t = std::clamp(t, 0., this->t);
+
+    if (t == this->t)
+    {
+        return U.back();
+    }
+
+    const double dt = this->t / (n_X() - 1);
+    double interpolate_value = std::fmod(t, dt) / dt;
+    const size_t i = t / dt;
+
+    const typename Model::input_vector_t u0 = U.at(i);
+    const typename Model::input_vector_t u1 = interpolatedInput() ? U.at(i + 1) : U.at(i);
+
+    return u0 + interpolate_value * (u1 - u0);
+}    
+
+The function `inputAtTime` is a member function of the `TrajectoryData` class, which is a template class for storing trajectories of a dynamical system. It takes a time `t` as input and returns the corresponding input vector at that time using linear interpolation between the input vectors at the nearest two time points. The function first checks if the time `t` is equal to the end time of the trajectory, and if so, returns the last input vector. Otherwise, it calculates the fractional part of the time `t` relative to the time step `dt`, and uses it to interpolate between the input vectors at the nearest two time points. The function returns the interpolated input vector. The `TrajectoryData` class has a member variable `U` that stores the input vectors, and a member function `interpolatedInput` that returns whether linear interpolation should be used for input vectors. The `Model` class is a template parameter for the `TrajectoryData` class, and represents the dynamical system being studied.
+
+scpp::TrajectoryData::interpolatedInput
+template <class Model>
+bool TrajectoryData<Model>::interpolatedInput() const
+{
+    return U.size() == X.size();
+}    
+
+The function interpolatedInput of the template class TrajectoryData for models returns a boolean value indicating whether the input data is interpolated or not. This is determined by checking if the size of the U vector (which represents the input) is equal to the size of the X vector (which represents the state). If both vectors have the same size, the input is considered interpolated, otherwise it is not.
+
+scpp::TrajectoryData::n_U
+template <class Model>
+size_t TrajectoryData<Model>::n_U() const
+{
+    return U.size();
+}    
+
+The code above is a part of the TrajectoryData class template in C++. It provides a method named n_U() const that returns the size of the U vector in the TrajectoryData object of the given Model type. This vector U contains the control inputs applied to the system during the simulation. The TrajectoryData class is used to store the trajectory data, including the state variables, input variables, and time, for a given Model. The const keyword indicates that this method does not modify the object's state.
+
+scpp::TrajectoryData::n_X
+template <class Model>
+size_t TrajectoryData<Model>::n_X() const
+{
+    return X.size();
+}    
+
+The code above is a part of the TrajectoryData class template in C++. It provides a method named n_X() which returns the size of the X vector in the TrajectoryData object. This vector contains the state variables of the dynamical system being modeled by the Model class, which is a template parameter for this class. The size of this vector is stored in the X member variable of the TrajectoryData object. This method allows access to this size without having to directly access the X member variable.
+
+scpp::LQRAlgorithm::LQRAlgorithm
+LQRAlgorithm::LQRAlgorithm(Model::ptr_t model) : model(model)
+{
+    loadParameters();
+}    
+
+The constructor of the LQRAlgorithm class takes a pointer to a Model object as an argument. It initializes the member variable model with this value and loads the algorithm's parameters using the loadParameters() function. This class is part of a larger system for implementing linear quadratic regulator (LQR) control algorithms, which are used to stabilize dynamic systems. The Model class represents the mathematical model of the system being controlled, and it provides functions for calculating the system's dynamics and input-output behavior. The LQRAlgorithm class will use this information to determine the optimal control input for the system.
+
+scpp::LQRAlgorithm::getSolution
+void LQRAlgorithm::getSolution(Model::input_vector_t &u)
+{
+    assert(this->u);
+    u = this->u.value();
+}    
+
+The code implements the Linear Quadratic Regulator (LQR) algorithm for solving optimal control problems. It provides a method called getSolution() that returns the optimal input vector u for a given model's input vector. The LQRAlgorithm class manages the computation of the optimal control law using the Riccati equation and the feedback gain matrix. The solution is stored in the u member variable, which is accessed through the value() function. This implementation assumes the availability of a Model class that provides the system dynamics and cost function.
+
+scpp::LQRAlgorithm::initialize
+void LQRAlgorithm::initialize()
+{
+    // print("[LQR] Starting controller for model '{}'.\n", Model::getModelName());
+
+    assert(state_weights_set and input_weights_set);
+
+    model->updateModelParameters();
+
+    model->getOperatingPoint(x_eq, u_eq);
+    model->computeJacobians(x_eq, u_eq, A, B);
+    ComputeLQR(Q, R, A, B, K);
+
+    initialized = true;
+    // print("[LQR] Controller started.\n");
+}    
+
+The LQRAlgorithm class initializes the LQR (Linear Quadratic Regulator) controller for a given model. It checks if the required weights for state and input variables are set, updates the model parameters, computes the equilibrium point, Jacobians, and then applies the LQR algorithm to compute the feedback gain matrix K. The function is called initialize() and sets the initialized flag to true. This function is called at the start of the controller.
+
+scpp::LQRAlgorithm::loadParameters
+void LQRAlgorithm::loadParameters()
+{
+    ParameterServer param(model->getParameterFolder() + "/LQR.info");
+
+    Model::state_vector_t q;
+    Model::input_vector_t r;
+    param.loadMatrix("state_weights", q);
+    param.loadMatrix("input_weights", r);
+    setStateWeights(q);
+    setInputWeights(r);
+}    
+
+The code presented initializes an LQR algorithm by loading parameters from a file. The parameters are stored in a ParameterServer object, which is created from the model's parameter folder. The state and input weights are loaded into vectors q and r, respectively, and then set as the state and input weights for the LQR algorithm using the setStateWeights() and setInputWeights() functions. This allows the LQR algorithm to be customized based on specific requirements.
+
+scpp::LQRAlgorithm::setFinalState
+void LQRAlgorithm::setFinalState(const Model::state_vector_t &x)
+{
+    x_final = x;
+}    
+
+The function setFinalState() in the LQRAlgorithm class is used to set the final state of the system being controlled. The final state is represented as a state vector (x) of type Model::state_vector_t. This function updates the private member variable x_final with the provided state vector. The LQRAlgorithm class is likely used for linear quadratic regulator (LQR) control, which is a feedback control algorithm used to minimize the quadratic cost function of a linear system. The final state is an important factor in this algorithm, as it affects the optimal control input at each time step.
+
+scpp::LQRAlgorithm::setInitialState
+void LQRAlgorithm::setInitialState(const Model::state_vector_t &x)
+{
+    x_init = x;
+}    
+
+The function setInitialState() is a member function of the LQRAlgorithm class. It sets the initial state of the system to the given state vector x. The initial state is stored in the private member variable x_init. This function can be called at any time to update the initial state for future calculations. The LQRAlgorithm class is used for implementing linear quadratic regulator (LQR) control theory, which is a feedback control method for linear systems with quadratic performance criteria. The Model class is used to represent the dynamic behavior of the system being controlled. The state vector x contains the current values of the system's state variables.
+
+scpp::LQRAlgorithm::setInputWeights
+void LQRAlgorithm::setInputWeights(const Model::input_vector_t &weights)
+{
+    R.setZero();
+    R.diagonal() = weights;
+    input_weights_set = true;
+}    
+
+The function setInputWeights() in the LQRAlgorithm class is used to set the input weights for the Linear Quadratic Regulator (LQR) algorithm. It initializes the R matrix to zero and sets its diagonal elements to the input weights provided as an argument. This function sets the input_weights_set flag to true, indicating that the input weights have been set. The input weights are used to assign different importance to each input signal in the LQR algorithm's cost function.
+
+scpp::LQRAlgorithm::setStateWeights
+void LQRAlgorithm::setStateWeights(const Model::state_vector_t &weights)
+{
+    Q.setZero();
+    Q.diagonal() = weights;
+    state_weights_set = true;
+}    
+
+The function named setStateWeights is being defined in the context of the LQRAlgorithm class. It takes a reference to a Model::state_vector_t object named weights as an argument. Inside the function, a matrix named Q is initialized to zero and its diagonal elements are assigned the values from the weights object. A boolean flag named state_weights_set is set to true to indicate that the state weights have been specified. This function allows the user to customize the weighting of individual states in the LQR algorithm's cost function.
+
+scpp::LQRAlgorithm::solve
+void LQRAlgorithm::solve()
+{
+    assert(initialized);
+
+    const Model::state_vector_t state_error = x_init - x_final;
+    u = -K * state_error + u_eq;
+}    
+
+The LQRAlgorithm class is initialized before solving the problem. The initial state and final state are inputted as x_init and x_final, respectively. The solution involves calculating the state error between the initial and final states, and then using the Kalman gain matrix K and the equilibrium input u_eq to calculate the optimal control input u. The algorithm solves the linear quadratic regulator (LQR) problem, which aims to minimize the quadratic cost function of the system's state and control input over a finite horizon.
+
+scpp::LQRTracker::LQRTracker
+LQRTracker::LQRTracker(Model::ptr_t model, const trajectory_data_t &td)
+    : model(model), td(td)
+{
+    loadParameters();
+
+    gains.resize(td.n_X());
+    for (size_t k = 0; k < td.n_X(); k++)
+    {
+        Model::state_matrix_t A;
+        Model::control_matrix_t B;
+
+        if (not td.interpolatedInput() and k == td.n_X() - 2)
+        {
+            model->computeJacobians(td.X.at(k), td.U.at(k - 1), A, B);
+        }
+        else
+        {
+            model->computeJacobians(td.X.at(k), td.U.at(k), A, B);
+        }
+
+        ComputeLQR(Q, R, A, B, gains.at(k));
+    }
+}    
+
+The LQRTracker class is constructed with a Model object and a trajectory_data object. It loads parameters and computes LQR gains for each state using the given Model and trajectory data. The gains are stored in a vector called gains. The constructor also checks whether the input is interpolated and adjusts the computation of Jacobians accordingly.
+
+scpp::LQRTracker::getInput
+void LQRTracker::getInput(double t, const Model::state_vector_t &x, Model::input_vector_t &u) const
+{
+    t = std::clamp(t, 0., td.t);
+    const Model::state_vector_t x_target = td.approxStateAtTime(t);
+    const Model::input_vector_t u_target = td.inputAtTime(t);
+    const Model::feedback_matrix_t K = interpolateGains(t);
+
+    u = -K * (x - x_target) + u_target;
+}    
+
+The LQRTracker class provides a method called getInput that takes the current time, the current state vector, and returns the optimal input vector for the given time and state. The method first checks if the time is within the valid range, and then retrieves the target state and input vectors at the given time using the Approximator class's methods. It then calculates the feedback gain matrix using the interpolateGains function, and finally computes the optimal input vector by subtracting the difference between the current state and the target state multiplied by the feedback gain matrix from the target input vector.
+
+scpp::LQRTracker::interpolateGains
+Model::feedback_matrix_t LQRTracker::interpolateGains(double t) const
+{
+    t = std::clamp(t, 0., td.t);
+
+    const double dt = td.t / (td.n_X() - 1);
+    double interpolate_value = std::fmod(t, dt) / dt;
+    const size_t i = t / dt;
+
+    const Model::feedback_matrix_t K0 = gains.at(i);
+    const Model::feedback_matrix_t K1 = td.interpolatedInput() ? gains.at(std::min(gains.size() - 1, i + 1)) : gains.at(i);
+
+    return K0 + interpolate_value * (K1 - K0);
+}    
+
+The function interpolateGains of the LQRTracker class interpolates the feedback gains between two adjacent time steps based on the input signal. It takes the current time as input and returns a feedback matrix representing the interpolated gains. The function first checks if the input time is within the valid range and then calculates the interpolation factor based on the time difference between the current time and the nearest time step. The function then retrieves the feedback matrices at the two adjacent time steps and interpolates their difference using the calculated interpolation factor. The resulting interpolated gains are returned as the feedback matrix. The gains vector stores the feedback matrices at each time step, and the td member variable contains information about the input signal.
+
+scpp::LQRTracker::loadParameters
+void LQRTracker::loadParameters()
+{
+    ParameterServer param(model->getParameterFolder() + "/LQR.info");
+
+    Model::state_vector_t q;
+    Model::input_vector_t r;
+    param.loadMatrix("state_weights", q);
+    param.loadMatrix("input_weights", r);
+
+    Q = q.asDiagonal();
+    R = r.asDiagonal();
+}    
+
+The code initializes an LQR tracker for a given model. It loads parameters from a parameter server, which are used to construct the state and input weight matrices Q and R, respectively. These matrices are then converted into diagonal matrices for use in the LQR algorithm. This process is performed by the loadParameters() function, which is called by the constructor of the LQRTracker class. The model used by the tracker is accessed through the model pointer passed to the constructor.
+
+scpp::MPCAlgorithm::MPCAlgorithm
+MPCAlgorithm::MPCAlgorithm(Model::ptr_t model)
+{
+    this->model = model;
+    loadParameters();
+}    
+
+The constructor of the MPCAlgorithm class takes a pointer to a Model object as an argument. It then loads the algorithm's parameters using the loadParameters() function. This class is part of a model predictive control (MPC) algorithm, which involves predicting the future behavior of a dynamic system based on a mathematical model and using that prediction to make optimal decisions in real-time. The Model object represents the mathematical model used in this algorithm.
+
+scpp::MPCAlgorithm::getSolution
+void MPCAlgorithm::getSolution(Model::state_vector_v_t &X, Model::input_vector_v_t &U)
+{
+    X = this->X;
+    U = this->U;
+}    
+
+The function getSolution() in the MPCAlgorithm class retrieves the optimal state vector X and input vector U for the current time step. These variables are stored as member variables of the class, and are updated during the optimization process. The function simply returns references to these variables, allowing the caller to access their values. This function is called by the main program to obtain the optimal control inputs for the current time step.
+
+scpp::MPCAlgorithm::initialize
+void MPCAlgorithm::initialize()
+{
+    print("[MPC] Starting controller for model '{}'.\n", Model::getModelName());
+
+    assert(state_weights_set and input_weights_set);
+
+    X.resize(K);
+    U.resize(K - 1);
+
+    model->updateModelParameters();
+
+    print("[MPC] Discretizing.\n");
+    const double timer_discretize = tic();
+    Model::state_vector_t x_eq;
+    Model::input_vector_t u_eq;
+    model->getOperatingPoint(x_eq, u_eq);
+    const double dt = time_horizon / (K - 1);
+    scpp::discretization::exactLinearDiscretization(model, dt, x_eq, u_eq, A, B, z);
+    print("{:<{}}{:.2f}ms\n", "[MPC] Time, discretization:", 50, toc(timer_discretize));
+
+    socp = buildMPCProblem(X, U,
+                           x_init, x_final,
+                           state_weights_intermediate, state_weights_terminal, input_weights,
+                           A, B, z,
+                           constant_dynamics, intermediate_cost_active);
+    model->addApplicationConstraints(socp, X, U);
+
+    solver = std::make_unique<cvx::ecos::ECOSSolver>(*socp);
+
+    initialized = true;
+    print("[MPC] Controller started.\n");
+}    
+
+The code initializes an MPC algorithm for a given model. It checks if state and input weights have been set, and then discretizes the model using exact linear discretization. The resulting matrices are used to build an SOCP problem, which is then solved by an ECOS solver. The code also adds application constraints and sets up the necessary variables for the algorithm. The initialization process is completed, and the controller is started.
+
+scpp::MPCAlgorithm::loadParameters
+void MPCAlgorithm::loadParameters()
+{
+    ParameterServer param(model->getParameterFolder() + "/MPC.info");
+
+    param.loadScalar("K", K);
+    param.loadScalar("nondimensionalize", nondimensionalize);
+    param.loadScalar("constant_dynamics", constant_dynamics);
+    param.loadScalar("intermediate_cost_active", intermediate_cost_active);
+    param.loadScalar("time_horizon", time_horizon);
+    param.loadMatrix("state_weights_intermediate", state_weights_intermediate);
+    param.loadMatrix("state_weights_terminal", state_weights_terminal);
+    param.loadMatrix("input_weights", input_weights);
+
+    setStateWeights(state_weights_intermediate, state_weights_terminal);
+    setInputWeights(input_weights);
+}    
+
+The code presented loads parameters from a file named "MPC.info" located in the folder specified by the model's parameter folder. These parameters include the gain K, a flag for nondimensionalization, a flag for constant dynamics, a flag for intermediate cost activation, the time horizon, and matrices for state and input weights. The function setStateWeights combines these matrices to form the overall state weighting, while setInputWeights sets the input weighting. These weights are used in the MPC algorithm to determine the optimal control input based on a predicted future state.
+
+scpp::MPCAlgorithm::readSolution
+void MPCAlgorithm::readSolution()
+{
+    cvx::MatrixX v_X, v_U;
+    socp->getVariable("X", v_X);
+    socp->getVariable("U", v_U);
+    Eigen::MatrixXd X = eval(v_X);
+    Eigen::MatrixXd U = eval(v_U);
+
+    for (size_t k = 0; k < K; k++)
+    {
+        this->X[k] = X.col(k);
+    }
+    for (size_t k = 0; k < K-1; k++)
+    {
+        this->U[k] = U.col(k);
+    }
+}    
+
+The code reads the solution variables X and U from the SOCP solver using cvx and stores them in the class's member variables X and U, respectively. The function is called readSolution(). The variables X and U are stored in Eigen matrices X and U, which are then evaluated using the eval() function from Eigen. The first K columns of X are assigned to the X member variable, and the first K-1 columns of U are assigned to the U member variable.
+
+scpp::MPCAlgorithm::setFinalState
+void MPCAlgorithm::setFinalState(const Model::state_vector_t &x)
+{
+    x_final = x;
+}    
+
+The function "setFinalState" is called to set the final state of the system being modeled. The final state is represented as a vector of state variables, which is stored in the variable "x_final". This function is part of the "MPCAlgorithm" class, which is used for model predictive control. The final state is likely used in the control algorithm to make decisions based on the predicted behavior of the system at its final state.
+
+scpp::MPCAlgorithm::setInitialState
+void MPCAlgorithm::setInitialState(const Model::state_vector_t &x)
+{
+    x_init = x;
+}    
+
+The function setInitialState() is a member function of the class MPCAlgorithm. It sets the initial state of the system, which is represented by the state vector x, to the value passed as an argument. The initial state is stored in the private member variable x_init of the MPCAlgorithm class. This function can be called at any point during the execution of the program to set the initial state for the model being used.
+
+scpp::MPCAlgorithm::setInputWeights
+void MPCAlgorithm::setInputWeights(const Model::input_vector_t &intermediate)
+{
+    input_weights = intermediate;
+
+    input_weights_set = true;
+}    
+
+The function setInputWeights() in the MPCAlgorithm class sets the input weights of the model. It takes an intermediate vector as input, which is assumed to be the output of a previous stage in a multi-stage process. The input weights are stored in the member variable input_weights, and the flag input_weights_set is set to true to indicate that the input weights have been updated. This function is called when new input data is received, and it is used to propagate the input weights through the multi-stage process.
+
+scpp::MPCAlgorithm::setStateWeights
+void MPCAlgorithm::setStateWeights(const Model::state_vector_t &intermediate,
+                                   const Model::state_vector_t &terminal)
+{
+    state_weights_intermediate = intermediate;
+    state_weights_terminal = terminal;
+
+    state_weights_set = true;
+}    
+
+The function setStateWeights in the MPCAlgorithm class is used to set the weights for the intermediate and terminal states of the system model. The weights are stored in the state_weights_intermediate and state_weights_terminal variables, respectively. This function sets the state_weights_set flag to true, indicating that the weights have been set. This flag is used to determine whether the weights should be included in the optimization process.
+
+scpp::MPCAlgorithm::solve
+void MPCAlgorithm::solve()
+{
+    assert(initialized);
+
+    print("Solving problem.\n");
+    const double timer_solve = tic();
+    if (nondimensionalize)
+    {
+        model->nondimensionalize();
+    }
+
+    solver->solve(false);
+
+    print("Solver message:\n");
+    print("> {}\n", solver->getResultString());
+
+    if (nondimensionalize)
+    {
+        model->redimensionalize();
+    }
+    print("{:<{}}{:.2f}ms\n", "Time, solve:", 50, toc(timer_solve));
+
+    readSolution();
+}    
+
+The MPCAlgorithm class in this C++ code initializes a model and a solver, and then solves the optimization problem using the solver. The solution is read and printed. The code includes options for nondimensionalization of the model. The solver's result string is also printed. The time taken to solve the problem is measured and printed.
+
+scpp::buildMPCProblem
+    std::shared_ptr<cvx::OptimizationProblem> buildMPCProblem(
+        Model::state_vector_v_t &X,
+        Model::input_vector_v_t &U,
+        Model::state_vector_t &x_init,
+        Model::state_vector_t &x_final,
+        Model::state_vector_t &state_weights_intermediate,
+        Model::state_vector_t &state_weights_terminal,
+        Model::input_vector_t &input_weights,
+        Model::state_matrix_t &A,
+        Model::control_matrix_t &B,
+        Model::state_vector_t &z,
+        bool constant_dynamics,
+        bool intermediate_cost_active)
+    {
+        auto socp = std::make_shared<cvx::OptimizationProblem>();
+
+        cvx::MatrixX v_X = socp->addVariable("X", Model::state_dim, X.size()); // states
+        cvx::MatrixX v_U = socp->addVariable("U", Model::input_dim, U.size()); // inputs
+        cvx::Scalar v_error_cost = socp->addVariable("error_cost");            // error minimization term
+        cvx::Scalar v_input_cost = socp->addVariable("input_cost");            // input minimization term
+
+        // Initial state
+        for (size_t i = 0; i < Model::state_dim; i++)
+        {
+            socp->addConstraint(cvx::equalTo(v_X.col(0), cvx::dynpar(x_init)));
+        }
+
+        for (size_t k = 0; k < X.size() - 1; k++)
+        {
+            /**
+             * Build linearized model equality constraint
+             *    x(k+1) == A x(k) + B u(k) + z
+             * 
+             */
+            cvx::VectorX lhs;
+            if (constant_dynamics)
+            {
+                lhs = cvx::par(A) * v_X.col(k) +
+                      cvx::par(B) * v_U.col(k) +
+                      cvx::par(z);
+            }
+            else
+            {
+                lhs = cvx::dynpar(A) * v_X.col(k) +
+                      cvx::dynpar(B) * v_U.col(k) +
+                      cvx::dynpar(z);
+            }
+
+            socp->addConstraint(cvx::equalTo(lhs, v_X.col(k + 1)));
+        }
+
+        /**
+         * Build error cost
+         * 
+         */
+        cvx::VectorX error_norm2_args(1 * v_X.rows());
+        if (intermediate_cost_active)
+        {
+            error_norm2_args.resize((X.size() - 1) * v_X.rows());
+            for (size_t k = 1; k < X.size() - 1; k++)
+            {
+                error_norm2_args.segment((k - 1) * v_X.cols(), v_X.cols()) = cvx::dynpar(state_weights_intermediate).cwiseProduct(-cvx::dynpar(x_final) + v_X.col(k));
+            }
+        }
+        error_norm2_args.tail(v_X.rows()) = cvx::dynpar(state_weights_terminal).cwiseProduct(-cvx::dynpar(x_final) + v_X.col(v_X.cols() - 1));
+        socp->addConstraint(cvx::lessThan(error_norm2_args.norm(), v_error_cost));
+        socp->addCostTerm(v_error_cost);
+
+        /**
+         * Build input cost
+         * 
+         */
+        cvx::VectorX input_norm2_args(U.size() * v_U.rows());
+        for (size_t k = 0; k < U.size(); k++)
+        {
+            input_norm2_args.segment(k * v_U.rows(), v_U.rows()) = cvx::dynpar(input_weights).cwiseProduct(v_U.col(k));
+        }
+        socp->addConstraint(cvx::lessThan(input_norm2_args.norm(), v_input_cost));
+        socp->addCostTerm(v_input_cost);
+
+        return socp;
+    }    
+
+The code defines a function called `buildMPCProblem` that takes various input parameters and returns a shared pointer to a cvx optimization problem. The function creates variables for states, inputs, error cost, and input cost, and adds constraints for initial state, linearized model equality, and error and input cost. It also adds a cost term for error and input cost. The function assumes that the model has either constant or linear dynamics, and allows for intermediate cost terms if desired. The function returns a shared pointer to the cvx optimization problem for use in solving the MPC problem.
+
+scpp::SCAlgorithm::SCAlgorithm
+    SCAlgorithm::SCAlgorithm(Model::ptr_t model)
+    {
+        this->model = model;
+        loadParameters();
+
+        all_td.reserve(max_iterations);
+    }    
+
+The constructor of the SCAlgorithm class initializes its model parameter and loads its parameters. It reserves memory for storing the total discounted rewards obtained during training, which is stored in the all_td vector. The maximum number of iterations is stored in the max_iterations constant.
+
+scpp::SCAlgorithm::calculateDefects
+    std::vector<bool> SCAlgorithm::calculateDefects()
+    {
+        std::vector<bool> pattern;
+
+        for (size_t k = 0; k < K - 1; k++)
+        {
+            Model::state_vector_t x = td.X.at(k);
+            const Model::input_vector_t u0 = td.U.at(k);
+            const Model::input_vector_t u1 = interpolate_input ? td.U.at(k + 1) : u0;
+
+            const double dt = td.t / (K - 1);
+            simulate(model, dt, u0, u1, x);
+
+            const double defect = (x - td.X.at(k + 1)).squaredNorm();
+
+            pattern.push_back(defect > nu_tol);
+        }
+
+        return pattern;
+    }    
+
+The code implements the SC algorithm for model order reduction using the Dynamic Mode Decomposition (DMD) method. It takes a time-delay embedding (TDE) as input and calculates the defects between the original and reduced models at each time step. The defects are compared to a tolerance value to determine if the reduced model accurately represents the original system. The code uses the SparseCovariance library for matrix operations and the Eigen library for linear algebra. The SCAlgorithm class contains the main function for calculating the defects, which calls the calculateDefects() function to generate a vector of boolean values indicating whether the defects exceed the tolerance at each time step. The interpolate_input flag is used to determine whether to interpolate the input between time steps. The simulate() function from the model class is called to simulate the system between time steps. The nu_tol variable holds the tolerance value for comparing the defects.
+
+scpp::SCAlgorithm::getAllSolutions
+    void SCAlgorithm::getAllSolutions(std::vector<trajectory_data_t> &all_trajectories)
+    {
+        if (nondimensionalize)
+        {
+            auto all_td_redim = all_td;
+            for (auto &td_redim : all_td_redim)
+            {
+                model->redimensionalizeTrajectory(td_redim);
+            }
+            all_trajectories = all_td_redim;
+        }
+        else
+        {
+            all_trajectories = all_td;
+        }
+    }    
+
+The function `getAllSolutions` in the `SCAlgorithm` class retrieves all solutions found by the algorithm and stores them in a vector of `trajectory_data_t` objects called `all_trajectories`. If the `nondimensionalize` flag is set, the trajectories are first redimensionalized using the `redimensionalizeTrajectory` function of the `Model` class before being added to the vector. Otherwise, the original trajectories are added as is. The function does not return anything and is called by other parts of the program to access the solutions.
+
+scpp::SCAlgorithm::getSolution
+    void SCAlgorithm::getSolution(trajectory_data_t &trajectory) const
+    {
+        trajectory = td;
+    }    
+
+The function getSolution() of the SCAlgorithm class is a constant member function that retrieves the solution stored in the trajectory_data_t structure named td. The solution is copied into the trajectory parameter passed to the function. This function is used to obtain the final trajectory computed by the SCAlgorithm optimization algorithm.
+
+scpp::SCAlgorithm::initialize
+    void SCAlgorithm::initialize()
+    {
+        print("Computing dynamics.\n");
+        const double timer_dynamics = tic();
+        model->initializeModel();
+        print("{:<{}}{:.2f}ms\n", "Time, dynamics:", 50, toc(timer_dynamics));
+
+        dd.initialize(K, interpolate_input, free_final_time);
+
+        td.initialize(K, interpolate_input);
+
+        socp = buildSCProblem(weight_time, weight_trust_region_time,
+                              weight_trust_region_trajectory, weight_virtual_control,
+                              td, dd);
+        model->addApplicationConstraints(socp, td.X, td.U);
+        solver = std::make_unique<cvx::ecos::ECOSSolver>(*socp);
+    }    
+
+The code initializes the dynamic model, computes the dynamics, and sets up the semidefinite programming (SDP) problem for the Stochastic Control (SC) algorithm. The `SCAlgorithm` class is used to implement the SC algorithm, which involves solving an SDP problem at each time step to find the optimal control input. The `initialize()` function is called to set up the problem, which includes initializing the `dd` and `td` classes for the disturbance and trajectory dynamics, respectively. The `socp` object is created to represent the SC problem, which includes weighting factors for different components of the optimization objective. The `model` object is added to the SC problem to include application constraints. Finally, the `solver` object is initialized using the `cvx` library's `ECOSSolver`.
+
+scpp::SCAlgorithm::iterate
+    bool SCAlgorithm::iterate()
+    {
+        // discretize
+        const double timer_iteration = tic();
+        double timer = tic();
+        discretization::multipleShooting(model, td, dd);
+        print("{:<{}}{:.2f}ms\n", "Time, discretization:", 50, toc(timer));
+
+        // solve the problem
+        print("\n");
+        print("Solving problem.\n");
+        timer = tic();
+        const bool success = solver->solve(false);
+        print("Solver message:\n");
+        print("> {}\n", solver->getResultString());
+        print("{:<{}}{:.2f}ms\n", "Time, solver:", 50, toc(timer));
+        print("\n");
+
+        timer = tic();
+        std::vector<bool> defects = calculateDefects();
+        print("{:<{}}{:.2f}ms\n", "Time, defects:", 50, toc(timer));
+        print("Defect pattern:\n");
+        for (bool defect : defects)
+        {
+            print("{}", defect ? "x" : "-");
+        }
+        print("\n\n");
+
+        if (not success)
+        {
+            print("Solver failed to find a solution. Terminating.\n");
+            std::terminate();
+        }
+
+        readSolution();
+
+        double norm1_nu;
+        socp->getVariableValue("norm1_nu", norm1_nu);
+
+        Eigen::VectorXd delta;
+        socp->getVariableValue("delta", delta);
+        double sum_delta = delta.sum();
+
+        double delta_sigma;
+        socp->getVariableValue("delta_sigma", delta_sigma);
+
+        if (norm1_nu < nu_tol)
+        {
+            weight_trust_region_trajectory *= 2.;
+        }
+
+        // print iteration summary
+        print("\n");
+        print("{:<{}}{: .4f}\n", "Norm Virtual Control", 50, norm1_nu);
+        if (free_final_time)
+        {
+            print("{:<{}}{: .4f}\n", "Time Trust Region Delta", 50, delta_sigma);
+        }
+        print("{:<{}}{: .4f}\n\n", "Trajectory Trust Region Delta", 50, sum_delta);
+
+        print("{:<{}}{: .4f}s\n\n", "Trajectory Time", 50, td.t);
+
+        print("{:<{}}{:.2f}ms\n\n", "Time, iteration:", 50, toc(timer_iteration));
+
+        // check for convergence
+        return sum_delta < delta_tol and norm1_nu < nu_tol;
+    }    
+
+The code implements a sequential quadratic programming (SQP) algorithm for solving nonlinear optimization problems with equality and inequality constraints. It uses the IPOPT solver and the CASADI framework for modeling and discretization. The algorithm iteratively discretizes the problem, solves it using the IPOPT solver, calculates defects, and updates trust regions. It checks for convergence based on norms and trust region deltas. The code also handles free final times and provides output summaries.
+
+scpp::SCAlgorithm::loadParameters
+    void SCAlgorithm::loadParameters()
+    {
+        ParameterServer param(model->getParameterFolder() + "/SC.info");
+
+        param.loadScalar("K", K);
+
+        param.loadScalar("free_final_time", free_final_time);
+
+        param.loadScalar("nondimensionalize", nondimensionalize);
+
+        param.loadScalar("delta_tol", delta_tol);
+        param.loadScalar("max_iterations", max_iterations);
+        param.loadScalar("nu_tol", nu_tol);
+
+        param.loadScalar("weight_time", weight_time);
+        param.loadScalar("weight_virtual_control", weight_virtual_control);
+        param.loadScalar("weight_trust_region_trajectory", weight_trust_region_trajectory);
+
+        param.loadScalar("interpolate_input", interpolate_input);
+
+        if (free_final_time)
+        {
+            param.loadScalar("weight_trust_region_time", weight_trust_region_time);
+        }
+    }    
+
+The code presented initializes an SC algorithm by loading parameters from a file. The algorithm is part of a larger model, and its parameters are stored in a folder named "SC.info". The parameters include K, free_final_time, nondimensionalize, delta_tol, max_iterations, nu_tol, weight_time, weight_virtual_control, weight_trust_region_trajectory, interpolate_input, and weight_trust_region_time (if free_final_time is true). These parameters are loaded using a ParameterServer object called param, which is created from the model's parameter folder. The code does not provide any further details about the SC algorithm or its functionality.
+
+scpp::SCAlgorithm::readSolution
+    void SCAlgorithm::readSolution()
+    {
+        if (free_final_time)
+        {
+            socp->getVariableValue("sigma", td.t);
+        }
+
+        Eigen::MatrixXd X, U;
+        socp->getVariableValue("X", X);
+        socp->getVariableValue("U", U);
+
+        for (size_t k = 0; k < td.n_X(); k++)
+        {
+            td.X[k] = X.col(k);
+        }
+        for (size_t k = 0; k < td.n_U(); k++)
+        {
+            td.U[k] = U.col(k);
+        }
+    }    
+
+The code presented initializes an object of the SCAlgorithm class and reads the solution from the optimization problem solved by the SparseCuts library. If the final time is free, it retrieves the value of the sigma variable, otherwise it assumes the final time is fixed. The solution is then extracted from the matrices X and U, which contain the state and control variables, respectively, and stored in the td structure for further use.
+
+scpp::SCAlgorithm::solve
+    void SCAlgorithm::solve(bool warm_start)
+    {
+        print("Solving model {}\n", Model::getModelName());
+
+        if (nondimensionalize)
+            model->nondimensionalize();
+
+        if (warm_start)
+        {
+            if (nondimensionalize)
+                model->nondimensionalizeTrajectory(td);
+        }
+        else
+        {
+            loadParameters();
+            model->getInitializedTrajectory(td);
+        }
+
+        model->updateModelParameters();
+
+        const double timer_total = tic();
+
+        size_t iteration = 0;
+        bool converged = false;
+
+        all_td.push_back(td);
+
+        while (iteration < max_iterations and not converged)
+        {
+            iteration++;
+
+            print("{:=^{}}\n", format("<Iteration {}>", iteration), 60);
+            converged = iterate();
+
+            all_td.push_back(td);
+        }
+
+        print("{:=^{}}\n\n", "", 60);
+
+        if (converged)
+        {
+            print("Converged after {} iterations.\n\n", iteration);
+        }
+        else
+        {
+            print("No convergence after {} iterations.\n\n", max_iterations);
+        }
+
+        if (nondimensionalize)
+        {
+            model->redimensionalize();
+            model->updateModelParameters();
+            model->redimensionalizeTrajectory(td);
+        }
+        print("{:<{}}{:.2f}ms\n", "Time, total:", 50, toc(timer_total));
+    }    
+
+The code presented solves a given mathematical model using the Successive Constraint (SC) algorithm. It first checks whether the model should be nondimensionalized, and if so, performs this operation. If the simulation is being restarted, it loads the previous parameters and initializes the trajectory. Otherwise, it loads the parameters and initializes the trajectory. The model is then updated with the current parameters, and the simulation begins. The code iterates until the maximum number of iterations is reached or convergence is achieved. At each iteration, the function iterate() is called, which performs the SC algorithm. The code keeps track of the trajectory at each iteration and outputs the final result, including the number of iterations required for convergence and the total time taken. The code also outputs the time taken for the entire simulation. The code uses the Model class to represent the mathematical model, and the SCAlgorithm class to implement the SC algorithm. The code also uses the Eigen library for linear algebra operations.
+
+scpp::buildSCProblem
+    std::shared_ptr<cvx::OptimizationProblem> buildSCProblem(
+        double &weight_time,
+        double &weight_trust_region_time,
+        double &weight_trust_region_trajectory,
+        double &weight_virtual_control,
+        trajectory_data_t &td,
+        discretization_data_t &dd)
+    {
+        const size_t K = td.n_X();
+
+        auto socp = std::make_shared<cvx::OptimizationProblem>();
+
+        cvx::MatrixX v_X = socp->addVariable("X", Model::state_dim, td.n_X());                   // states
+        cvx::MatrixX v_U = socp->addVariable("U", Model::input_dim, td.n_U());                   // inputs
+        cvx::MatrixX v_nu = socp->addVariable("nu", Model::state_dim, td.n_X() - 1);             // virtual control
+        cvx::MatrixX v_nu_bound = socp->addVariable("nu_bound", Model::state_dim, td.n_X() - 1); // virtual control
+        cvx::Scalar v_norm1_nu = socp->addVariable("norm1_nu");                                  // virtual control norm upper bound
+        cvx::VectorX v_delta = socp->addVariable("delta", K);                                    // change of the stacked [ x(k), u(k) ] vector
+
+        cvx::Scalar v_sigma;
+        cvx::Scalar v_delta_sigma;
+        if (dd.variableTime())
+        {
+            v_sigma = socp->addVariable("sigma");
+            v_delta_sigma = socp->addVariable("delta_sigma"); // squared change of sigma
+            // minimize total time
+            socp->addCostTerm(cvx::dynpar(weight_time) * v_sigma);
+            // Total time must not be negative
+            socp->addConstraint(cvx::greaterThan(v_sigma, 0.001));
+        }
+
+        for (size_t k = 0; k < K - 1; k++)
+        {
+            /**
+             * Build linearized model equality constraint
+             *    x(k+1) == A x(k) + B u(k) + C u(k+1) + Sigma sigma + z + nu
+             * 
+             */
+            cvx::VectorX lhs = cvx::dynpar(dd.A.at(k)) * v_X.col(k) +
+                               cvx::dynpar(dd.B.at(k)) * v_U.col(k) +
+                               cvx::dynpar(dd.z.at(k)) +
+                               v_nu.col(k);
+
+            if (dd.interpolatedInput())
+            {
+                lhs += cvx::dynpar(dd.C.at(k)) * v_U.col(k + 1);
+            }
+            if (dd.variableTime())
+            {
+                lhs += cvx::dynpar(dd.s.at(k)) * v_sigma;
+            }
+
+            socp->addConstraint(cvx::equalTo(lhs, v_X.col(k + 1)));
+        }
+
+        /**
+         * Build virtual control norm
+         *
+         * minimize (weight_virtual_control * norm1_nu)
+         * s.t. sum(nu_bound) <= norm1_nu
+         *      -nu_bound <= nu <= nu_bound
+         *
+         */
+        {
+            socp->addConstraint(cvx::box(-v_nu_bound, v_nu, v_nu_bound));
+
+            // sum(nu_bound) <= norm1_nu
+            socp->addConstraint(cvx::lessThan(v_nu_bound.sum(), v_norm1_nu));
+
+            // Minimize the virtual control
+            socp->addCostTerm(cvx::dynpar(weight_virtual_control) * v_norm1_nu);
+        }
+
+        if (dd.variableTime())
+        {
+            /**
+             *  Build sigma trust region
+             * (sigma - sigma0) * (sigma - sigma0) <= delta_sigma
+             *          is equivalent to
+             * norm2(
+             *        0.5 - 0.5 * delta_sigma
+             *        sigma0 - sigma
+             *      )
+             *      <= 0.5 + 0.5 * delta_sigma;
+             */
+            {
+                cvx::VectorX norm2_terms(2);
+                norm2_terms << cvx::par(0.5) + cvx::par(-0.5) * v_delta_sigma,
+                    -cvx::dynpar(td.t) + v_sigma;
+
+                socp->addConstraint(cvx::lessThan(norm2_terms.norm(), cvx::par(0.5) + cvx::par(0.5) * v_delta_sigma));
+
+                // Minimize delta_sigma
+                socp->addCostTerm(cvx::dynpar(weight_trust_region_time) * v_delta_sigma);
+            }
+        }
+
+        for (size_t k = 0; k < K; k++)
+        {
+            /**
+             * Build state and input trust-region:
+             *
+             *  norm2(
+             *        (x - x0)
+             *        (u - u0)
+             *      )
+             *     <= delta;
+             *
+             */
+
+            cvx::VectorX norm2_terms(v_X.rows());
+            norm2_terms << cvx::dynpar(td.X.at(k)) - v_X.col(k);
+
+            if (dd.interpolatedInput() or (not dd.interpolatedInput() and k < K - 1))
+            {
+                norm2_terms.conservativeResize(v_X.rows() + v_U.rows());
+                norm2_terms.tail(v_U.rows()) = cvx::dynpar(td.U.at(k)) - v_U.col(k);
+            }
+
+            socp->addConstraint(cvx::lessThan(norm2_terms.norm(), v_delta(k)));
+        }
+
+        /**
+         * Minimize combined state/input trust region over all K:
+         * 
+         */
+        {
+            // Minimize trust region cost
+            socp->addCostTerm(cvx::dynpar(weight_trust_region_trajectory) * v_delta.sum());
+        }
+
+        return socp;
+    }    
+
+The code presented defines a function called `buildSCProblem` that takes various weights and trajectory data as input and returns an optimization problem using the CVX library. The function creates variables for states, inputs, virtual controls, and their bounds, as well as a variable for the total time. It then builds constraints for the linearized model, virtual control norm, trust regions for states and inputs, and a trust region for the total time (if specified). The function also adds cost terms for the virtual control norm, trust regions, and total time (if specified). The resulting optimization problem can be used to find a control sequence that satisfies the constraints and minimizes the specified costs.
+
+scpp::SCvxAlgorithm::SCvxAlgorithm
+    SCvxAlgorithm::SCvxAlgorithm(Model::ptr_t model)
+    {
+        this->model = model;
+        loadParameters();
+
+        all_td.reserve(max_iterations);
+    }    
+
+The constructor of the SCvxAlgorithm class initializes its member variables and loads parameters. It takes a Model pointer as an argument and reserves memory for storing the trajectories of all states in all time steps for up to max_iterations iterations. This class is part of a larger optimization algorithm for solving convex optimization problems.
+
+scpp::SCvxAlgorithm::getAllSolutions
+    void SCvxAlgorithm::getAllSolutions(std::vector<trajectory_data_t> &all_trajectories)
+    {
+        if (nondimensionalize)
+        {
+            auto all_td_redim = all_td;
+            for (auto &td_redim : all_td_redim)
+            {
+                model->redimensionalizeTrajectory(td_redim);
+            }
+            all_trajectories = all_td_redim;
+        }
+        else
+        {
+            all_trajectories = all_td;
+        }
+    }    
+
+The function `getAllSolutions` in the `SCvxAlgorithm` class retrieves all solutions found by the optimization algorithm. If the `nondimensionalize` flag is set, the trajectories are first redimensionalized using the `redimensionalizeTrajectory` method of the `Model` class, and then returned as a vector of `trajectory_data_t` structures. Otherwise, the original vector of trajectories is returned as is. This function is used to retrieve all solutions found during the optimization process for further analysis or visualization.
+
+scpp::SCvxAlgorithm::getNonlinearCost
+    double SCvxAlgorithm::getNonlinearCost()
+    {
+        double nonlinear_cost_dynamics = 0.;
+        for (size_t k = 0; k < K - 1; k++)
+        {
+            Model::state_vector_t x = td.X.at(k);
+            const Model::input_vector_t u0 = td.U.at(k);
+            const Model::input_vector_t u1 = interpolate_input ? td.U.at(k + 1) : u0;
+
+            simulate(model, td.t / (K - 1), u0, u1, x);
+
+            const double virtual_control_cost = (x - td.X.at(k + 1)).lpNorm<1>();
+            nonlinear_cost_dynamics += virtual_control_cost;
+        }
+
+        return nonlinear_cost_dynamics;
+    }    
+
+The function `getNonlinearCost` calculates the nonlinear cost associated with the dynamics of the system being modeled. It iterates through the time steps between the initial and final states, simulating the system's behavior using the `simulate` function from the `Model` class. The cost is calculated as the difference between the predicted and actual states at each time step, summed over all time steps. The `interpolate_input` flag is used to determine whether the input at the next time step is used in the simulation, or if the current input is held constant. The final nonlinear cost is returned.
+
+scpp::SCvxAlgorithm::getSolution
+    void SCvxAlgorithm::getSolution(trajectory_data_t &trajectory) const
+    {
+        trajectory = td;
+    }    
+
+The function getSolution() of the class SCvxAlgorithm returns the trajectory data stored in the member variable td. This function is a const member function, indicating that it does not modify the object's state. The returned trajectory data is stored in a structure called trajectory_data_t, which is likely defined elsewhere in the program. The function is a part of the SCvxAlgorithm class, which presumably implements some form of model predictive control algorithm.
+
+scpp::SCvxAlgorithm::initialize
+    void SCvxAlgorithm::initialize()
+    {
+        print("Computing dynamics.\n");
+        const double timer_dynamics = tic();
+        model->initializeModel();
+        print("{:<{}}{:.2f}ms\n", "Time, dynamics:", 50, toc(timer_dynamics));
+
+        dd.initialize(K, interpolate_input, false);
+        td.initialize(K, interpolate_input);
+
+        socp = buildSCvxProblem(trust_region, weight_virtual_control, td, dd);
+        model->addApplicationConstraints(socp, td.X, td.U);
+
+        solver = std::make_unique<cvx::ecos::ECOSSolver>(*socp);
+    }    
+
+The code initializes the SCvx algorithm by computing dynamics, initializing the dynamic and terminal cost functions, building the SCvx optimization problem, adding application constraints, and creating an ECOS solver for solving the optimization problem. The trust region and weight for virtual control are specified as options. The model is also initialized with the given input interpolation method. The time taken for computing dynamics is recorded and printed.
+
+scpp::SCvxAlgorithm::iterate
+    bool SCvxAlgorithm::iterate()
+    {
+        // discretize
+        const double timer_iteration = tic();
+        double timer = tic();
+
+        discretization::multipleShooting(model, td, dd);
+
+        print("{:<{}}{:.2f}ms\n", "Time, discretization:", 50, toc(timer));
+
+        bool converged = false;
+
+        while (true)
+        {
+            // solve problem
+            const trajectory_data_t old_td = td;
+
+            print("\n");
+            print("Solving problem.\n");
+            timer = tic();
+            const bool success = solver->solve(false);
+            print("Solver message:\n");
+            print("> {}\n", solver->getResultString());
+            print("{:<{}}{:.2f}ms\n", "Time, solver:", 50, toc(timer));
+            print("\n");
+
+            if (not success)
+            {
+                print("Solver failed to find a solution. Terminating.\n");
+                std::terminate();
+            }
+
+            readSolution();
+
+            // compare linear and nonlinear costs
+            timer = tic();
+            const double nonlinear_cost_dynamics = getNonlinearCost();
+
+            double norm1_nu;
+            socp->getVariableValue("norm1_nu", norm1_nu);
+
+            // TODO: Consider linearized model constraints
+            const double nonlinear_cost_constraints = 0.;
+            const double linear_cost_constraints = 0.;
+
+            const double nonlinear_cost = nonlinear_cost_dynamics + nonlinear_cost_constraints; // J
+            const double linear_cost = norm1_nu + linear_cost_constraints;                      // L
+
+            if (not last_nonlinear_cost)
+            {
+                last_nonlinear_cost = nonlinear_cost;
+                break;
+            }
+
+            const double actual_change = last_nonlinear_cost.value() - nonlinear_cost; // delta_J
+            const double predicted_change = last_nonlinear_cost.value() - linear_cost; // delta_L
+
+            last_nonlinear_cost = nonlinear_cost;
+            print("{:<{}}{:.2f}ms\n", "Time, cost comparison:", 50, toc(timer));
+
+            print("\n");
+            print("{:<{}}{:.5f}\n", "Actual change:", 50, actual_change);
+            print("{:<{}}{:.5f}\n", "Predicted change:", 50, predicted_change);
+
+            if (std::abs(predicted_change) < change_threshold)
+            {
+                converged = true;
+                break;
+            }
+
+            const double rho = actual_change / predicted_change;
+            if (rho < rho_0)
+            {
+                trust_region /= alpha;
+                print("Trust region too large. Solving again with radius={}\n", trust_region);
+                print("--------------------------------------------------\n");
+                td = old_td;
+            }
+            else
+            {
+                print("Solution accepted.\n");
+
+                if (rho < rho_1)
+                {
+                    print("Decreasing radius.\n");
+                    trust_region /= alpha;
+                }
+                else if (rho >= rho_2)
+                {
+                    print("Increasing radius.\n");
+                    trust_region *= beta;
+                }
+                break;
+            }
+        }
+
+        // print iteration summary
+        print("\n");
+        print("{:<{}}{: .4f}s\n\n", "Trajectory Time", 50, td.t);
+
+        print("{:<{}}{:.2f}ms\n\n", "Time, iteration:", 50, toc(timer_iteration));
+
+        return converged;
+    }    
+
+The code presented is an implementation of the sequential quadratic programming (SQP) algorithm for solving nonlinear optimization problems. It uses the IPOPT solver to minimize a nonlinear cost function subject to nonlinear equality and inequality constraints. The algorithm employs multiple shooting discretization and trust-region methods to ensure convergence. The code also includes functions for reading and writing input and output files, as well as printing informative messages to the console. The user can specify various parameters such as the optimization horizon, the number of shooting points, and the trust-region parameters. The code is well-documented with comments explaining the purpose and functionality of each function and class.
+
+scpp::SCvxAlgorithm::loadParameters
+    void SCvxAlgorithm::loadParameters()
+    {
+        ParameterServer param(model->getParameterFolder() + "/SCvx.info");
+
+        param.loadScalar("K", K);
+
+        param.loadScalar("nondimensionalize", nondimensionalize);
+
+        param.loadScalar("max_iterations", max_iterations);
+        param.loadScalar("alpha", alpha);
+        param.loadScalar("beta", beta);
+        param.loadScalar("rho_0", rho_0);
+        param.loadScalar("rho_1", rho_1);
+        param.loadScalar("rho_2", rho_2);
+
+        param.loadScalar("change_threshold", change_threshold);
+        param.loadScalar("weight_virtual_control", weight_virtual_control);
+        param.loadScalar("trust_region", trust_region);
+
+        param.loadScalar("interpolate_input", interpolate_input);
+    }    
+
+The code presented initializes an SCvx algorithm by loading parameters from a file. The algorithm is implemented in the SCvxAlgorithm class, which is part of a larger model. The parameters loaded include K, a scalar, and various scalars for the optimization algorithm's iterative process. The code also sets up options for interpolation of input, virtual control weighting, and trust region constraints. The parameters are loaded from a file named "SCvx.info" located in the model's parameter folder.
+
+scpp::SCvxAlgorithm::readSolution
+    void SCvxAlgorithm::readSolution()
+    {
+        Eigen::MatrixXd X, U;
+        socp->getVariableValue("X", X);
+        socp->getVariableValue("U", U);
+
+        for (size_t k = 0; k < td.n_X(); k++)
+        {
+            td.X[k] = X.col(k);
+        }
+        for (size_t k = 0; k < td.n_U(); k++)
+        {
+            td.U[k] = U.col(k);
+        }
+    }    
+
+The code presented initializes an object of the SCvxAlgorithm class, which is used to solve convex optimization problems using the second-order cone programming (SOCP) method. The readSolution() function is called to extract the solution matrices X and U from the SOCP solver and store them in the td (temporary data) structure. The X matrix contains the decision variables, while the U matrix contains the slack variables used to enforce non-negativity constraints. The td structure is used to pass the solution matrices to the next stage of the optimization process.
+
+scpp::SCvxAlgorithm::solve
+    void SCvxAlgorithm::solve(bool warm_start)
+    {
+        const double timer_total = tic();
+
+        print("Solving model {}\n", Model::getModelName());
+
+        if (nondimensionalize)
+            model->nondimensionalize();
+
+        if (warm_start)
+        {
+            if (nondimensionalize)
+                model->nondimensionalizeTrajectory(td);
+        }
+        else
+        {
+            loadParameters();
+            model->getInitializedTrajectory(td);
+        }
+
+        model->updateModelParameters();
+
+        size_t iteration = 0;
+
+        all_td.push_back(td);
+
+        bool converged = false;
+
+        while (iteration < max_iterations and not converged)
+        {
+            iteration++;
+            print("{:=^{}}\n", format("<Iteration {}>", iteration), 60);
+            converged = iterate();
+
+            all_td.push_back(td);
+        }
+
+        print("{:=^{}}\n\n", "", 60);
+
+        if (converged)
+        {
+            print("Converged after {} iterations.\n\n", iteration);
+        }
+        else
+        {
+            print("No convergence after {} iterations.\n\n", max_iterations);
+        }
+
+        if (nondimensionalize)
+        {
+            model->redimensionalize();
+            model->updateModelParameters();
+            model->redimensionalizeTrajectory(td);
+        }
+        print("{:=^{}}\n\n", "", 60);
+        print("{:<{}}{:.2f}ms\n", "Time, total:", 50, toc(timer_total));
+    }    
+
+The code implements the SCvx algorithm for solving nonlinear optimization problems with constraints. It takes a maximum number of iterations as input and can perform a warm start. The algorithm updates the model parameters and trajectory at each iteration, and checks for convergence. The code also provides options for nondimensionalization and output of timing information. The Model class is used to represent the optimization problem, and the SCvxAlgorithm class handles the optimization process. The code uses the Eigen library for linear algebra operations.
+
+scpp::buildSCvxProblem
+    std::shared_ptr<cvx::OptimizationProblem> buildSCvxProblem(
+        double &trust_region,
+        double &weight_virtual_control,
+        trajectory_data_t &td,
+        discretization_data_t &dd)
+    {
+        auto socp = std::make_shared<cvx::OptimizationProblem>();
+
+        cvx::MatrixX v_X = socp->addVariable("X", Model::state_dim, td.n_X());                   // states
+        cvx::MatrixX v_U = socp->addVariable("U", Model::input_dim, td.n_U());                   // inputs
+        cvx::MatrixX v_nu = socp->addVariable("nu", Model::state_dim, td.n_X() - 1);             // virtual control
+        cvx::MatrixX v_nu_bound = socp->addVariable("nu_bound", Model::state_dim, td.n_X() - 1); // virtual control lower/upper bound
+        cvx::Scalar v_norm1_nu = socp->addVariable("norm1_nu");                                  // virtual control norm
+
+        for (size_t k = 0; k < td.n_X() - 1; k++)
+        {
+            /**
+             * Build linearized model equality constraint
+             *    x(k+1) == A x(k) + B u(k) + C u(k+1) + z + nu
+             * 
+             */
+            cvx::VectorX lhs = cvx::dynpar(dd.A.at(k)) * v_X.col(k) +
+                               cvx::dynpar(dd.B.at(k)) * v_U.col(k) +
+                               cvx::dynpar(dd.z.at(k)) +
+                               v_nu.col(k);
+
+            if (td.interpolatedInput())
+            {
+                lhs += cvx::dynpar(dd.C.at(k)) * v_U.col(k + 1);
+            }
+
+            socp->addConstraint(cvx::equalTo(lhs, v_X.col(k + 1)));
+        }
+
+        /**
+         * Build virtual control norm
+         *
+         * minimize (weight_virtual_control * norm1_nu)
+         * s.t. sum(nu_bound) <= norm1_nu
+         *      -nu_bound <= nu <= nu_bound
+         *
+         */
+        {
+            socp->addConstraint(cvx::box(-v_nu_bound, v_nu, v_nu_bound));
+
+            // sum(nu_bound) <= norm1_nu
+            socp->addConstraint(cvx::lessThan(v_nu_bound.sum(), v_norm1_nu));
+
+            // Minimize the virtual control
+            socp->addCostTerm(cvx::dynpar(weight_virtual_control) * v_norm1_nu);
+        }
+
+        for (size_t k = 0; k < td.n_U(); k++)
+        {
+            /**
+             * Build input trust region:
+             *     norm2(u - u0)  <=  trust_region
+             *
+             */
+            cvx::VectorX norm2_args = cvx::dynpar(td.U.at(k)) + -v_U.col(k);
+
+            socp->addConstraint(cvx::lessThan(norm2_args.norm(), cvx::dynpar(trust_region)));
+        }
+
+        return socp;
+    }    
+
+The code defines a function called `buildSCvxProblem` that takes several parameters and returns a shared pointer to a cvx optimization problem. The function creates variables for states, inputs, virtual control, and their bounds, and adds constraints and costs to the optimization problem. The constraints include the linearized model equality, virtual control norm, and input trust region. The function is used in a larger context for solving constrained optimal control problems using the SCvx solver.
+
+scpp::discretization::exactLinearDiscretization
+void exactLinearDiscretization(Model::ptr_t model,
+                               double ts,
+                               const Model::state_vector_t &x_eq,
+                               const Model::input_vector_t &u_eq,
+                               Model::state_matrix_t &A,
+                               Model::control_matrix_t &B,
+                               Model::state_vector_t &z)
+{
+    Model::state_matrix_t A_c;
+    Model::control_matrix_t B_c;
+    Model::state_vector_t f;
+    model->computeJacobians(x_eq, u_eq, A_c, B_c);
+    model->computef(x_eq, u_eq, f);
+
+    Eigen::MatrixXd E;
+    E.resize(Model::state_dim + Model::input_dim, Model::state_dim + Model::input_dim);
+    E.setZero();
+    E.topLeftCorner<Model::state_dim, Model::state_dim>() = A_c;
+    E.topRightCorner<Model::state_dim, Model::input_dim>() = B_c;
+    Eigen::MatrixXd expE = (E * ts).exp();
+
+    A = expE.topLeftCorner<Model::state_dim, Model::state_dim>();
+    B = expE.topRightCorner<Model::state_dim, Model::input_dim>();
+
+    E.resize(Model::state_dim + 1, Model::state_dim + 1);
+    E.setZero();
+    E.topLeftCorner<Model::state_dim, Model::state_dim>() = A_c;
+    E.topRightCorner<Model::state_dim, 1>() = f - A_c * x_eq - B_c * u_eq;
+    expE = (E * ts).exp();
+
+    z = expE.topRightCorner<Model::state_dim, 1>();
+}    
+
+The function exactLinearDiscretization takes as input a model, time step size ts, the exact solution at time t=0 (x_eq), and the exact input at time t=0 (u_eq). It computes the Jacobian matrices A_c and B_c using the model's computeJacobians() function, and the function value f using the model's computef() function. It then constructs the matrix E, which is used to compute the state transition matrix A and the control input matrix B using matrix exponentiation. Finally, it computes the state vector z using another matrix exponentiation with E and the initial state and input. This function is used for exact linear discretization of the given model.
+
+scpp::discretization::multipleShooting
+void multipleShooting(
+    Model::ptr_t model,
+    trajectory_data_t &td,
+    discretization_data_t &dd)
+{
+    if (not dd.interpolatedInput() and not dd.variableTime())
+        multipleShootingImplementation<false, false>(model, td, dd);
+    if (not dd.interpolatedInput() and dd.variableTime())
+        multipleShootingImplementation<false, true>(model, td, dd);
+    if (dd.interpolatedInput() and not dd.variableTime())
+        multipleShootingImplementation<true, false>(model, td, dd);
+    if (dd.interpolatedInput() and dd.variableTime())
+        multipleShootingImplementation<true, true>(model, td, dd);
+}    
+
+The code implements multiple shooting method for solving optimal control problems using C++. It takes a model, trajectory data, and discretization data as input and calls four different functions based on the discretization data. The first function assumes constant input and fixed time steps, the second assumes constant input and variable time steps, the third assumes interpolated input and fixed time steps, and the fourth assumes interpolated input and variable time steps. Each function implements the multiple shooting method using the given assumptions.
+
+scpp::ODE::ODE
+ODE::ODE(Model::ptr_t model, double dt, const Model::input_vector_t &u0, const Model::input_vector_t &u1)
+    : model(model), u0(u0), u1(u1), dt(dt) {}    
+
+The ODE class is constructed with a Model pointer, time step size dt, and input vectors u0 and u1. The constructor initializes the model, input vectors, and time step size. The ODE class is used to solve ordinary differential equations using the Euler method. The model is responsible for defining the system of differential equations, and the input vectors contain the initial conditions and input functions. The time step size dt determines the accuracy and stability of the numerical solution.
+
+scpp::ODE::operator()
+void ODE::operator()(const Model::state_vector_t &f, Model::state_vector_t &dfdt, const double t)
+{
+    Model::input_vector_t u = u0 + t / dt * (u1 - u0);
+    model->computef(f, u, dfdt);
+}    
+
+The code defines an overloaded function called operator() for the ODE class. This function takes as input the current state vector f, the time t, and modifies the state vector dfdt. The function first calculates the input vector u using a linear interpolation between u0 and u1 based on the time t and the time step dt. It then passes this u and the current state vector f to the model's computef function to calculate the derivative dfdt.
+
+scpp::simulate
+void simulate(Model::ptr_t model, double dt,
+              const Model::input_vector_t &u0,
+              const Model::input_vector_t &u1,
+              Model::state_vector_t &x)
+{
+    using namespace boost::numeric::odeint;
+    runge_kutta_fehlberg78<Model::state_vector_t, double, Model::state_vector_t, double, vector_space_algebra> stepper;
+
+    ODE ode(model, dt, u0, u1);
+
+    integrate_adaptive(stepper, ode, x, 0., dt, dt / 20.);
+}    
+
+The code implements a simulation function that uses the Runge-Kutta-Fehlberg 7(8) method to solve ordinary differential equations (ODEs) defined by a given model. The function takes as input the model, time step size, initial conditions, and input values at two different times. It returns the state vector at the end of the simulation. The simulation is adaptive, meaning the step size is adjusted automatically to ensure accuracy. The code uses the Boost library for numerical ODE integration.
+
+scpp::models::deg2rad
+template <typename T>
+void deg2rad(T &deg)
+{
+    deg *= M_PI / 180.;
+}    
+
+The code presented is a function template named deg2rad that takes a parameter of type T and converts degrees to radians by multiplying it with the value of the mathematical constant pi divided by 180. This function can be used for any data type that supports the assignment operator (=) and the multiplication operator (*). The function does not return any value as it modifies the original argument passed to it. This function can be useful in situations where the user needs to convert degrees to radians for mathematical calculations.
+
+scpp::models::eulerRotationMatrixXY
+template <typename T>
+Eigen::Matrix<T, 3, 3> eulerRotationMatrixXY(const Eigen::Matrix<T, 2, 1> &eta)
+{
+    const T phi = eta.x();
+    const T theta = eta.y();
+
+    Eigen::Matrix<T, 3, 3> M;
+    M.row(0) << cos(theta), T(0.), sin(theta);
+    M.row(1) << sin(theta) * sin(phi), cos(phi), -sin(phi) * cos(theta);
+    M.row(2) << -sin(theta) * cos(phi), sin(phi), cos(phi) * cos(theta);
+
+    return M;
+}    
+
+The code defines a template function called eulerRotationMatrixXY that takes a 2x1 matrix of type T as an argument named eta. The function returns a 3x3 matrix of type T called M. The matrix M is initialized with three rows, each containing three elements. The first row contains the cosine of theta, zero, and the sine of theta. The second row contains the sine of theta multiplied by the sine of phi, the cosine of phi, and the negative sine of phi multiplied by the cosine of theta. The third row contains the negative sine of theta multiplied by the cosine of phi, the sine of phi, and the cosine of phi multiplied by the cosine of theta. The values of phi and theta are obtained from the elements of the input matrix eta. This function is used to calculate the rotation matrix for Euler angles XY in homogeneous coordinates.
+
+scpp::models::eulerToQuaternionXYZ
+template <typename T>
+Eigen::Quaternion<T> eulerToQuaternionXYZ(const Eigen::Matrix<T, 3, 1> &eta)
+{
+    Eigen::Quaternion<T> q;
+    q = Eigen::AngleAxis<T>(eta.x(), Eigen::Matrix<T, 3, 1>::UnitX()) *
+        Eigen::AngleAxis<T>(eta.y(), Eigen::Matrix<T, 3, 1>::UnitY()) *
+        Eigen::AngleAxis<T>(eta.z(), Eigen::Matrix<T, 3, 1>::UnitZ());
+
+    return q;
+}    
+
+The code defines a template function called eulerToQuaternionXYZ that takes a 3x1 matrix of Euler angles (eta) as input and returns a Quaternion object (q) using Euler's rotation formula. The function first creates a Quaternion object (q) and then applies three successive rotations around the x, y, and z axes using AngleAxis objects. The AngleAxis class is a helper class that represents a rotation around an axis by a given angle. The UnitX(), UnitY(), and UnitZ() functions are used to create unit vectors along the x, y, and z axes, respectively. The resulting Quaternion object (q) represents the orientation of the object in 3D space, as defined by the input Euler angles.
+
+scpp::models::eulerToQuaternionZYX
+template <typename T>
+Eigen::Quaternion<T> eulerToQuaternionZYX(const Eigen::Matrix<T, 3, 1> &eta)
+{
+    Eigen::Quaternion<T> q;
+    q = Eigen::AngleAxis<T>(eta.z(), Eigen::Matrix<T, 3, 1>::UnitZ()) *
+        Eigen::AngleAxis<T>(eta.y(), Eigen::Matrix<T, 3, 1>::UnitY()) *
+        Eigen::AngleAxis<T>(eta.x(), Eigen::Matrix<T, 3, 1>::UnitX());
+    return q;
+}    
+
+The code defines a template function called eulerToQuaternionZYX that takes a constant matrix of type T with dimensions 3x1 as an argument named eta. The function returns a Quaternion object of type T created using the Eigen library. The Quaternion is calculated by applying three AngleAxis transformations to the input matrix in the order of Z, Y, and X rotations. The AngleAxis class is also part of the Eigen library and takes an angle and an axis as arguments to perform a rotation around that axis by that angle. The function is useful for converting Euler angles (Z, Y, X) to a quaternion representation.
+
+scpp::models::omegaMatrix
+template <typename T>
+Eigen::Matrix<T, 4, 4> omegaMatrix(const Eigen::Matrix<T, 3, 1> &w)
+{
+    Eigen::Matrix<T, 4, 4> omega;
+    omega << T(0.), -w(0), -w(1), -w(2),
+        w(0), T(0.), w(2), -w(1),
+        w(1), -w(2), T(0.), w(0),
+        w(2), w(1), -w(0), T(0.);
+
+    return omega;
+}    
+
+The code defines a function called omegaMatrix that takes a 3x1 matrix of type T as an argument and returns a 4x4 matrix of type T. The function uses the Eigen library to create a 4x4 matrix called omega, which is initialized with values based on the input vector w. The matrix elements are calculated using the provided formula for the skew-symmetric matrix representing the angular velocity vector w. The function can be used to calculate the rotation matrix for a rigid body with a known angular velocity.
+
+scpp::models::omegaMatrixReduced
+template <typename T>
+Eigen::Matrix<T, 3, 3> omegaMatrixReduced(const Eigen::Matrix<T, 3, 1> &q)
+{
+    Eigen::Matrix<T, 3, 3> omega;
+    const T qw = sqrt(1. - q.squaredNorm());
+    omega << qw, -q(2), q(1),
+        q(2), qw, -q(0),
+        -q(1), q(0), qw;
+
+    return omega;
+}    
+
+The code defines a function called omegaMatrixReduced that takes a constant reference to a 3x1 matrix of type T, called q, as input. The function returns an Eigen::Matrix<T, 3, 3> object called omega. The function first calculates the square root of 1 minus the squared norm of q, and stores it in a variable called qw. The function then populates the omega matrix using the calculated qw and the elements of q. The omegaMatrixReduced function is used to calculate the reduced angular velocity matrix from a given quaternion representation of orientation.
+
+scpp::models::quaternionToEulerXYZ
+template <typename T>
+Eigen::Matrix<T, 3, 1> quaternionToEulerXYZ(const Eigen::Quaternion<T> &q)
+{
+    const Eigen::Matrix<T, 3, 3> R = q.toRotationMatrix();
+    const T phi = atan2(-R(1, 2), R(2, 2));
+    const T theta = asin(R(0, 2));
+    const T psi = atan2(-R(0, 1), R(0, 0));
+    return Eigen::Matrix<T, 3, 1>(phi, theta, psi);
+}    
+
+The code presented defines a function called quaternionToEulerXYZ that takes a quaternion as input and returns an Eigen matrix containing the corresponding Euler angles in XYZ order. The function first converts the quaternion to a rotation matrix using the toRotationMatrix() method. It then calculates the Euler angles using the atan2() and asin() functions. The resulting angles are stored in a 3x1 matrix and returned by the function. The code uses the Eigen library for matrix operations.
+
+scpp::models::quaternionToEulerZYX
+template <typename T>
+Eigen::Matrix<T, 3, 1> quaternionToEulerZYX(const Eigen::Quaternion<T> &q)
+{
+    const Eigen::Matrix<T, 3, 3> R = q.toRotationMatrix();
+    const T phi = atan2(R(1, 0), R(0, 0));
+    const T theta = asin(-R(2, 0));
+    const T psi = atan2(R(2, 1), R(2, 2));
+    return Eigen::Matrix<T, 3, 1>(psi, theta, phi);
+}    
+
+The code presented defines a template function called quaternionToEulerZYX that takes an Eigen::Quaternion<T> object as input and returns an Eigen::Matrix<T, 3, 1> containing the Euler angles in ZYX order. The function first converts the quaternion to a rotation matrix using the toRotationMatrix() method, then calculates the Euler angles using the atan2() function to handle the signs of the sine and cosine values. The resulting Euler angles are stored in a 3x1 matrix and returned by the function. The code does not have any external dependencies or complex logic, making it a simple and efficient way to convert quaternions to Euler angles in Eigen.
+
+scpp::models::quaternionToVector
+template <typename T>
+Eigen::Matrix<T, 4, 1> quaternionToVector(const Eigen::Quaternion<T> &q)
+{
+    Eigen::Matrix<T, 4, 1> q_vec;
+    q_vec << q.w(), q.vec();
+    return q_vec;
+}    
+
+The code presented defines a function called 'quaternionToVector' that takes an argument of type 'Eigen::Quaternion<T>' and returns a matrix of size 4x1. The function first initializes a matrix 'q_vec' of size 4x1 with elements 'q.w()' and 'q.vec()'. The 'q' parameter is a quaternion object of type 'Eigen::Quaternion<T>' which is passed as an argument to the function. The 'q.w()' function returns the scalar component of the quaternion, while 'q.vec()' returns the vector component of the quaternion. The 'quaternionToVector' function converts a quaternion to a vector representation by stacking the scalar and vector components into a single column vector.
+
+scpp::models::rad2deg
+template <typename T>
+void rad2deg(T &rad)
+{
+    rad *= 180. / M_PI;
+}    
+
+The code above is a function template named rad2deg that converts radians to degrees using the mathematical formula radians * 180 degrees per radian. The function takes a parameter of type T, which is a generic data type, and modifies its value by multiplying it with 180 divided by the value of the mathematical constant pi (M_PI). This function can be used to convert radians to degrees for any data type that supports multiplication and assignment operations.
+
+scpp::models::rotationJacobianXY
+template <typename T>
+Eigen::Matrix<T, 2, 2> rotationJacobianXY(const Eigen::Matrix<T, 2, 1> &eta)
+{
+    const T theta = eta.y();
+
+    Eigen::Matrix<T, 2, 2> M;
+    M.row(0) << cos(theta), sin(theta);
+    M.row(1) << -sin(theta), cos(theta);
+
+    return M;
+}    
+
+The code defines a function called rotationJacobianXY that takes a 2x1 matrix of type T as an argument named eta. The function returns a 2x2 matrix of type T called M. The function calculates the values of M based on the y component of the input eta matrix, which represents the angle theta in radians. The first row of M contains the cosine and sine of theta, while the second row contains the negative of the sine and the cosine of theta. This function is used to calculate the Jacobian matrix for a rotation transformation in the XY plane.
+
+scpp::models::rotationJacobianXYZ
+template <typename T>
+Eigen::Matrix<T, 3, 3> rotationJacobianXYZ(const Eigen::Matrix<T, 3, 1> &eta)
+{
+    // const T phi = eta.x();
+    const T theta = eta.y();
+    const T psi = eta.z();
+
+    Eigen::Matrix<T, 3, 3> M;
+    M.row(0) << cos(psi), -sin(psi), T(0.);
+    M.row(1) << cos(theta) * sin(psi), cos(theta) * cos(psi), T(0.);
+    M.row(2) << -sin(theta) * cos(psi), sin(theta) * sin(psi), cos(theta);
+
+    return M / cos(theta);
+}    
+
+The code defines a function called rotationJacobianXYZ that takes a 3x1 matrix of type T as an argument named eta. The function returns a 3x3 matrix of type T called M. The function calculates the values of phi, theta, and psi from the elements of eta, and then populates the rows of M using these values. The function returns M divided by cos(theta). This function is used to calculate the Jacobian matrix for rotations in XYZ coordinates.
+
+scpp::models::vectorToQuaternion
+template <typename T>
+Eigen::Quaternion<T> vectorToQuaternion(const Eigen::Matrix<T, 3, 1> &v)
+{
+    return Eigen::Quaternion<T>(std::sqrt(1. - v.squaredNorm()), v.x(), v.y(), v.z());
+}    
+
+The code defines a template function named vectorToQuaternion that takes a constant reference to an Eigen matrix of size 3x1 containing elements of type T as input. The function returns an Eigen quaternion object initialized with the square root of 1 minus the squared norm of the input vector, followed by the x, y, and z components of the vector. This function is used to convert a vector into a quaternion representation.
+
+scpp::models::vectorToQuaternion
+template <typename T>
+Eigen::Quaternion<T> vectorToQuaternion(const Eigen::Matrix<T, 4, 1> &v)
+{
+    return Eigen::Quaternion<T>(v(3), v(0), v(1), v(2));
+}    
+
+The code defines a template function named vectorToQuaternion that takes a constant reference to an Eigen matrix of type T with dimensions 4x1 as input. The function returns an Eigen quaternion object of type T initialized with the elements of the input vector in a specific order. The function is called vectorToQuaternion and is defined within an unspecified namespace. The function uses the Eigen library to perform matrix and vector operations. The input vector is assumed to represent a 3D vector, and the function converts it into a quaternion representation that can be used for rotations in 3D space.
+
+scpp::models::Rocket2d::Parameters::loadFromFile
+    void Rocket2d::Parameters::loadFromFile(const std::string &path)
+    {
+        ParameterServer param(path);
+
+        param.loadMatrix("g_I", g_I);
+        param.loadScalar("J_B", J_B);
+        param.loadMatrix("r_T_B", r_T_B);
+
+        Eigen::Vector2d r_init, v_init;
+        Eigen::Vector2d r_final, v_final;
+        double w_init, w_final;
+
+        param.loadMatrix("r_init", r_init);
+        param.loadMatrix("v_init", v_init);
+        param.loadScalar("eta_init", eta_init);
+        param.loadScalar("w_init", w_init);
+
+        param.loadMatrix("r_final", r_final);
+        param.loadMatrix("v_final", v_final);
+        param.loadScalar("eta_final", eta_final);
+        param.loadScalar("w_final", w_final);
+
+        param.loadScalar("final_time", final_time);
+
+        param.loadScalar("m", m);
+        param.loadScalar("T_min", T_min);
+        param.loadScalar("T_max", T_max);
+        param.loadScalar("gamma_gs", gamma_gs);
+        param.loadScalar("gimbal_max", gimbal_max);
+        param.loadScalar("theta_max", theta_max);
+        param.loadScalar("w_B_max", w_B_max);
+        param.loadScalar("constrain_initial_final", constrain_initial_final);
+        param.loadScalar("add_slack_variables", add_slack_variables);
+
+        deg2rad(gimbal_max);
+        deg2rad(theta_max);
+        deg2rad(gamma_gs);
+        deg2rad(w_B_max);
+        deg2rad(w_init);
+        deg2rad(w_final);
+        deg2rad(eta_init);
+        deg2rad(eta_final);
+
+        x_init << r_init, v_init, eta_init, w_init;
+        x_final << r_final, v_final, eta_final, w_final;
+    }    
+
+The code presented defines a class called Rocket2d, which contains a Parameters structure that loads parameters from a file using the ParameterServer class. The Parameters structure includes matrices and scalars for initial and final positions, velocities, and angular velocities, as well as parameters for the rocket's mass, minimum and maximum thrust, gimbal and pitch limits, and whether to constrain initial and final conditions or add slack variables. The code also converts angles from degrees to radians. The x_init and x_final matrices store the initial and final states, respectively.
+
+scpp::models::Rocket2d::Parameters::nondimensionalize
+    void Rocket2d::Parameters::nondimensionalize()
+    {
+        r_scale = x_init.head(2).norm();
+        m_scale = m;
+
+        m /= m_scale;
+        r_T_B /= r_scale;
+        g_I /= r_scale;
+        J_B /= m_scale * r_scale * r_scale;
+
+        x_init.segment<2>(0) /= r_scale;
+        x_init.segment<2>(2) /= r_scale;
+
+        x_final.segment<2>(0) /= r_scale;
+        x_final.segment<2>(2) /= r_scale;
+
+        T_min /= m_scale * r_scale;
+        T_max /= m_scale * r_scale;
+    }    
+
+The code presented initializes the parameters of a rocket simulation in two dimensions. It scales the mass, initial position, and initial velocity of the rocket by a factor of r_scale, which is calculated as the norm of the first two coordinates of the initial position. The thrust force, initial acceleration, and moment of inertia are also scaled by this factor. The simulation time is scaled by the product of the mass and radius of the rocket. The initial and final positions are also scaled by the radius. The code also sets the minimum and maximum simulation times in non-dimensional units.
+
+scpp::models::Rocket2d::Parameters::redimensionalize
+    void Rocket2d::Parameters::redimensionalize()
+    {
+        m *= m_scale;
+        r_T_B *= r_scale;
+        g_I *= r_scale;
+        J_B *= m_scale * r_scale * r_scale;
+
+        x_init.segment<2>(0) *= r_scale;
+        x_init.segment<2>(2) *= r_scale;
+
+        x_final.segment<2>(0) *= r_scale;
+        x_final.segment<2>(2) *= r_scale;
+
+        T_min *= m_scale * r_scale;
+        T_max *= m_scale * r_scale;
+    }    
+
+The code above defines a class called Rocket2d::Parameters, which contains variables related to the parameters of a rocket simulation in 2D. The variables include mass (m), position relative to the body (r_T_B), angular velocity (g_I), inertia tensor (J_B), initial position (x_init), final position (x_final), minimum and maximum time (T_min and T_max) for the simulation. The function redimensionalize() is provided to scale these variables by certain factors (m_scale and r_scale). This function is used to adjust the simulation parameters for different scenarios.
+
+scpp::models::Rocket2d::addApplicationConstraints
+    void Rocket2d::addApplicationConstraints(std::shared_ptr<cvx::OptimizationProblem> socp,
+                                             state_vector_v_t &,
+                                             input_vector_v_t &)
+    {
+        cvx::MatrixX v_X, v_U;
+        socp->getVariable("X", v_X);
+        socp->getVariable("U", v_U);
+
+        if (p.constrain_initial_final)
+        {
+            // Initial and final state
+            socp->addConstraint(cvx::equalTo(cvx::dynpar(p.x_init), v_X.col(0)));
+            socp->addConstraint(cvx::equalTo(cvx::dynpar(p.x_final), v_X.rightCols(1)));
+            socp->addConstraint(cvx::equalTo(v_U(0, v_U.cols() - 1), 0.));
+        }
+
+        // State Constraints:
+        // Glideslope
+        socp->addConstraint(cvx::lessThan(v_X.row(0).colwise().norm(),
+                                          cvx::dynpar(p.tan_gamma_gs) * v_X.row(1)));
+        // // Max Tilt Angle
+        socp->addConstraint(cvx::box(-cvx::dynpar(p.theta_max),
+                                     v_X.row(4),
+                                     cvx::dynpar(p.theta_max)));
+        // Max Rotation Velocity
+        socp->addConstraint(cvx::box(-cvx::dynpar(p.w_B_max),
+                                     v_X.row(5),
+                                     cvx::dynpar(p.w_B_max)));
+
+        // Control Constraints:
+        // Gimbal Range
+        socp->addConstraint(cvx::box(-cvx::dynpar(p.gimbal_max),
+                                     v_U.row(0),
+                                     cvx::dynpar(p.gimbal_max)));
+        // Thrust Range
+        socp->addConstraint(cvx::box(cvx::dynpar(p.T_min),
+                                     v_U.row(1),
+                                     cvx::dynpar(p.T_max)));
+    }    
+
+The code adds application constraints to an optimization problem using the CVX library. It retrieves variables X and U from the problem and adds constraints for initial and final states, glideslope, maximum tilt angle, maximum rotation velocity, gimbal range, and thrust range. These constraints are based on parameters defined in the Rocket2d class. The function is called by the addApplicationConstraints() method of the Rocket2d class.
+
+scpp::models::Rocket2d::getInitializedTrajectory
+    void Rocket2d::getInitializedTrajectory(trajectory_data_t &td)
+    {
+        for (size_t k = 0; k < td.n_X(); k++)
+        {
+            const double alpha1 = double(td.n_X() - k) / td.n_X();
+            const double alpha2 = double(k) / td.n_X();
+
+            td.X.at(k) = alpha1 * p.x_init + alpha2 * p.x_final;
+        }
+
+        for (auto &u : td.U)
+        {
+            u << 0, (p.T_max + p.T_min) / 2;
+        }
+
+        td.t = p.final_time;
+    }    
+
+The function `getInitializedTrajectory` initializes the trajectory data `td` for a given rocket object `p`. It sets the initial and final positions of the trajectory based on the alpha values, which are calculated based on the index `k` and the total number of points `n_X()`. The acceleration is set to zero for all points. The final time of the trajectory is set to the final time of the rocket object `p`. The function does not return any value.
+
+scpp::models::Rocket2d::getNewModelParameters
+    void Rocket2d::getNewModelParameters(param_vector_t &par)
+    {
+        par << p.m, p.J_B, p.g_I, p.r_T_B;
+
+        p.tan_gamma_gs = std::tan(p.gamma_gs);
+    }    
+
+The function `getNewModelParameters` in the `Rocket2d` class is responsible for populating a vector of parameters for a new model. It adds five parameters to the vector: the mass `m`, moment of inertia `J_B`, gravitational constant `g_I`, and position vector `r_T_B` of the center of mass relative to the body frame. The tangent of the flight path angle `gamma_gs` is calculated separately and stored in `tan_gamma_gs`.
+
+scpp::models::Rocket2d::getOperatingPoint
+    void Rocket2d::getOperatingPoint(state_vector_t &x, input_vector_t &u)
+    {
+        x.setZero();
+        u << 0, -p.g_I * p.m;
+    }    
+
+The function getOperatingPoint() of the Rocket2d class is called to obtain the operating point for the rocket. It initializes the state vector x to zero and sets the input vector u to a value of zero for the thrust force and a negative value for the gravitational force, which is proportional to the mass of the rocket. This function is used to determine the equilibrium state of the rocket under given conditions.
+
+scpp::models::Rocket2d::loadParameters
+    void Rocket2d::loadParameters()
+    {
+        p.loadFromFile(getParameterFolder() + "/model.info");
+    }    
+
+The method loadParameters() in the Rocket2d class loads parameters from a file named "model.info" located in the folder specified by getParameterFolder(). This file contains information about the model being used for the rocket simulation. The loadFromFile() function is used to read the parameters from the file. This method is called to initialize the parameters for the simulation.
+
+scpp::models::Rocket2d::nondimensionalize
+    void Rocket2d::nondimensionalize()
+    {
+        p.nondimensionalize();
+    }    
+
+The method nondimensionalize() of the Rocket2d class calls the nondimensionalize() method of the p object. This method is used to convert physical units to non-dimensional values for simulation purposes. The Rocket2d class is likely used to simulate a rocket's motion in a 2D environment, and the p object may represent physical properties such as pressure or density. The nondimensionalization process is commonly used in fluid dynamics simulations to simplify calculations and reduce the number of variables required.
+
+scpp::models::Rocket2d::nondimensionalizeTrajectory
+    void Rocket2d::nondimensionalizeTrajectory(trajectory_data_t &td)
+    {
+        for (auto &x : td.X)
+        {
+            x.head(4) /= p.r_scale;
+        }
+        for (auto &u : td.U)
+        {
+            u(1) /= p.m_scale * p.r_scale;
+        }
+    }    
+
+The function `nondimensionalizeTrajectory` in the `Rocket2d` class takes a `trajectory_data_t` object as input and modifies its `X` and `U` vectors. The `X` vector, which contains the position and time of each point in the trajectory, is divided by the `r_scale` value to make it non-dimensional. The `U` vector, which contains the velocity and time of each point in the trajectory, has its second element (which represents the vertical velocity) divided by the product of the mass and radius scales to make it non-dimensional. This function is likely used to simplify the trajectory data for analysis or visualization purposes.
+
+scpp::models::Rocket2d::redimensionalize
+    void Rocket2d::redimensionalize()
+    {
+        p.redimensionalize();
+    }    
+
+The method 'redimensionalize' of the 'Rocket2d' class calls the 'redimensionalize' method of its private member 'p'. This action is likely to resize or adjust the dimensions of the 'p' object, which may be necessary for certain operations or calculations involving the 'Rocket2d' object. However, without further context or information about the 'p' object and its usage, it is unclear what specific dimensions are being adjusted or why this method is required.
+
+scpp::models::Rocket2d::redimensionalizeTrajectory
+    void Rocket2d::redimensionalizeTrajectory(trajectory_data_t &td)
+    {
+        for (auto &x : td.X)
+        {
+            x.head(4) *= p.r_scale;
+        }
+        for (auto &u : td.U)
+        {
+            u(1) *= p.m_scale * p.r_scale;
+        }
+    }    
+
+The function "redimensionalizeTrajectory" in the "Rocket2d" class takes a trajectory data structure "td" as input and modifies it by scaling the position components X(1:4) by the factor "p.r_scale" and the thrust component U(1) by the product of "p.m_scale" and "p.r_scale". This function is used to adapt the trajectory data to different simulation scenarios with varying scales for mass and radius.
+
+scpp::models::Rocket2d::systemFlowMap
+    void Rocket2d::systemFlowMap(const state_vector_ad_t &x,
+                                 const input_vector_ad_t &u,
+                                 const param_vector_ad_t &par,
+                                 state_vector_ad_t &f)
+    {
+        using T = scalar_ad_t;
+
+        auto m = par(0);
+        auto J_B = par(1);
+        auto g_I = par.segment<2>(2);
+        auto r_T_B = par.segment<2>(4);
+        // = 6 parameters
+
+        // state variables
+        // x, y, vx, vy, eta, omega
+        Eigen::Matrix<T, 2, 1> v = x.segment<2>(2);
+        T eta = x(4);
+        T w = x(5);
+
+        // input variables
+        T angle = u(0);
+        T magnitude = u(1);
+        Eigen::Matrix<T, 2, 1> T_B =
+            Eigen::Rotation2D<T>(angle) * Eigen::Matrix<T, 2, 1>(0., magnitude);
+
+        Eigen::Rotation2D<T> R_I_B(eta);
+
+        f.segment<2>(0) << v;
+        f.segment<2>(2) << 1. / m * (R_I_B * T_B) + g_I;
+        f(4) = w;
+        f(5) = 1. / J_B * (r_T_B.x() * T_B.y() - r_T_B.y() * T_B.x());
+    }    
+
+The function `systemFlowMap` is a part of a larger system that models the motion of a rigid body in two dimensions. It takes as input the current state vector `x`, the input vector `u`, and the parameter vector `par`. The function calculates the derivative of the state vector `f` using the given inputs. The state vector `x` consists of the position and velocity components, as well as the orientation and angular velocity components. The input vector `u` contains the angle and magnitude of the torque applied to the body. The parameter vector `par` contains six parameters that describe the mass, moment of inertia, and gravity of the body. The function uses several matrices and vectors, such as `m`, `J_B`, `g_I`, `r_T_B`, `v`, `eta`, `w`, `T_B`, and `R_I_B`, to perform the necessary calculations. The function returns the derivative vector `f` that represents the time derivative of the state vector.
+
+scpp::models::RocketQuat::Parameters::loadFromFile
+    void RocketQuat::Parameters::loadFromFile(const std::string &path)
+    {
+        ParameterServer param(path);
+
+        bool random_initial_state;
+        double I_sp;
+        double m_init, m_dry;
+        Eigen::Vector3d r_init, v_init, rpy_init, w_init;
+        Eigen::Vector3d r_final, v_final, rpy_final, w_final;
+
+        param.loadMatrix("g_I", g_I);
+        param.loadMatrix("J_B", J_B);
+        param.loadMatrix("r_T_B", r_T_B);
+        param.loadScalar("m_init", m_init);
+        param.loadMatrix("r_init", r_init);
+        param.loadMatrix("v_init", v_init);
+        param.loadMatrix("rpy_init", rpy_init);
+        param.loadMatrix("w_init", w_init);
+        param.loadMatrix("w_final", w_final);
+        param.loadScalar("m_dry", m_dry);
+        param.loadMatrix("r_final", r_final);
+        param.loadMatrix("v_final", v_final);
+        param.loadMatrix("rpy_final", rpy_final);
+        param.loadScalar("T_min", T_min);
+        param.loadScalar("T_max", T_max);
+        param.loadScalar("t_max", t_max);
+        param.loadScalar("I_sp", I_sp);
+        param.loadScalar("gimbal_max", gimbal_max);
+        param.loadScalar("theta_max", theta_max);
+        param.loadScalar("gamma_gs", gamma_gs);
+        param.loadScalar("w_B_max", w_B_max);
+        param.loadScalar("random_initial_state", random_initial_state);
+        param.loadScalar("final_time", final_time);
+        param.loadScalar("exact_minimum_thrust", exact_minimum_thrust);
+        param.loadScalar("enable_roll_control", enable_roll_control);
+
+        deg2rad(gimbal_max);
+        deg2rad(theta_max);
+        deg2rad(gamma_gs);
+        deg2rad(w_B_max);
+        deg2rad(rpy_init);
+        deg2rad(rpy_final);
+        deg2rad(w_init);
+        deg2rad(w_final);
+
+        alpha_m = 1. / (I_sp * fabs(g_I(2)));
+
+        const auto q_init = eulerToQuaternionXYZ(rpy_init);
+        const auto q_final = eulerToQuaternionXYZ(rpy_final);
+        x_init << m_init, r_init, v_init, q_init.w(), q_init.vec(), w_init;
+        if (random_initial_state)
+        {
+            randomizeInitialState();
+        }
+        x_final << m_dry, r_final, v_final, q_final.w(), q_final.vec(), w_final;
+    }    
+
+The code above initializes a RocketQuat object's parameters from a file. It reads various parameters such as mass, initial and final positions and velocities, initial and final orientations, and thrust values. It also reads parameters for controlling the orientation of the rocket, such as maximum angles and rates. The code converts some of these parameters from degrees to radians and sets up the initial and final states of the rocket. If the "random_initial_state" parameter is set, the initial state is randomized. The code uses the ParameterServer class to load the parameters from the file.
+
+scpp::models::RocketQuat::Parameters::nondimensionalize
+    void RocketQuat::Parameters::nondimensionalize()
+    {
+        m_scale = x_init(0);
+        r_scale = x_init.segment(1, 3).norm();
+
+        alpha_m *= r_scale;
+        r_T_B /= r_scale;
+        g_I /= r_scale;
+        J_B /= m_scale * r_scale * r_scale;
+
+        x_init(0) /= m_scale;
+        x_init.segment(1, 3) /= r_scale;
+        x_init.segment(4, 3) /= r_scale;
+
+        x_final(0) /= m_scale;
+        x_final.segment(1, 3) /= r_scale;
+        x_final.segment(4, 3) /= r_scale;
+
+        T_min /= m_scale * r_scale;
+        T_max /= m_scale * r_scale;
+        t_max /= m_scale * r_scale * r_scale;
+    }    
+
+The code above initializes a RocketQuat object's Parameters class, which contains various parameters for simulating a rocket's motion. The function nondimensionalize is called to scale the parameters to non-dimensional values, making them independent of physical units. The scaling factors are calculated based on the initial position and velocity of the rocket, as well as its mass and radius. The scaled parameters are then used in the simulation.
+
+scpp::models::RocketQuat::Parameters::randomizeInitialState
+    void RocketQuat::Parameters::randomizeInitialState()
+    {
+        // std::mt19937 eng(time(nullptr));
+        // auto dist = std::uniform_real_distribution<double>(-1., 1.);
+
+        // // mass
+        // x_init(0) *= 1.;
+
+        // // position
+        // x_init(1) *= dist(eng);
+        // x_init(2) *= dist(eng);
+        // x_init(3) *= 1.;
+
+        // // velocity
+        // x_init(4) *= dist(eng);
+        // x_init(5) *= dist(eng);
+        // x_init(6) *= 1. + 0.2 * dist(eng);
+
+        // // orientation
+        // double rx = dist(eng) * rpy_init.x();
+        // double ry = dist(eng) * rpy_init.y();
+        // double rz = rpy_init.z();
+        // Eigen::Vector3d euler(rx, ry, rz);
+        // x_init.segment(7, 3) << quaternionToVector(eulerToQuaternionXYZ(euler));
+    }    
+
+The code above initializes the parameters of a RocketQuat object's initial state randomly using a uniform distribution between -1 and 1. The mass is scaled by 1, while the position and velocity components are scaled by values generated by the distribution. The orientation is generated by rotating the initial orientation around two axes using the eulerToQuaternionXYZ function, and then converting it to a vector using the quaternionToVector function. The resulting vector is stored in the x_init array segment from index 7 to 9. The code uses the mt19937 random number generator from the C++ standard library's <random> header.
+
+scpp::models::RocketQuat::Parameters::redimensionalize
+    void RocketQuat::Parameters::redimensionalize()
+    {
+        alpha_m /= r_scale;
+        r_T_B *= r_scale;
+        g_I *= r_scale;
+        J_B *= m_scale * r_scale * r_scale;
+
+        x_init(0) *= m_scale;
+        x_init.segment(1, 3) *= r_scale;
+        x_init.segment(4, 3) *= r_scale;
+
+        x_final(0) *= m_scale;
+        x_final.segment(1, 3) *= r_scale;
+        x_final.segment(4, 3) *= r_scale;
+
+        T_min *= m_scale * r_scale;
+        T_max *= m_scale * r_scale;
+        t_max *= m_scale * r_scale * r_scale;
+    }    
+
+The code above defines a class called RocketQuat, which contains a set of parameters for a rocket's attitude dynamics. The class has a nested struct called Parameters, which contains variables such as alpha_m, r_T_B, g_I, J_B, x_init, x_final, T_min, T_max, and t_max. The function redimensionalize is called to resize these variables based on scaling factors m_scale and r_scale. This function adjusts alpha_m, r_T_B, g_I, J_B, x_init, and x_final by dividing or multiplying them by the respective scaling factors. T_min and T_max are also scaled by m_scale and r_scale, while t_max is scaled by m_scale, r_scale, and r_scale. This function is likely used to adapt the parameters to different scenarios or units of measurement.
+
+scpp::models::RocketQuat::addApplicationConstraints
+    void RocketQuat::addApplicationConstraints(std::shared_ptr<cvx::OptimizationProblem> socp,
+                                               state_vector_v_t &,
+                                               input_vector_v_t &U0)
+    {
+        cvx::MatrixX v_X, v_U;
+        socp->getVariable("X", v_X);
+        socp->getVariable("U", v_U);
+
+        // Initial state
+        socp->addConstraint(cvx::equalTo(v_X.col(0), cvx::dynpar(p.x_init)));
+
+        // Final State
+        // mass and roll are free
+        for (size_t i : {1, 2, 3,
+                         4, 5, 6,
+                         8, 9,
+                         11, 12, 13})
+        {
+            socp->addConstraint(cvx::equalTo(v_X(i, v_X.cols() - 1), cvx::dynpar(p.x_final(i))));
+        }
+
+        // State Constraints:
+        // Mass
+        socp->addConstraint(cvx::greaterThan(v_X.row(0), cvx::dynpar(p.x_final(0))));
+
+        // Glide Slope
+        socp->addConstraint(cvx::lessThan(v_X.block(1, 0, 2, v_X.cols()).colwise().norm(),
+                                          cvx::dynpar(p_dyn.gs_const) * v_X.block(3, 0, 1, v_X.cols())));
+
+        // Max Tilt Angle
+        socp->addConstraint(cvx::lessThan(v_X.block(8, 0, 2, v_X.cols()).colwise().norm(),
+                                          cvx::dynpar(p_dyn.tilt_const)));
+
+        // Max Rotation Velocity
+        socp->addConstraint(cvx::lessThan(v_X.block(11, 0, 3, v_X.cols()).colwise().norm(),
+                                          cvx::dynpar(p.w_B_max)));
+
+        // Control Constraints:
+        // Final Input
+        socp->addConstraint(cvx::equalTo(v_U.col(v_U.cols() - 1)(0), 0.));
+        socp->addConstraint(cvx::equalTo(v_U.col(v_U.cols() - 1)(1), 0.));
+        socp->addConstraint(cvx::equalTo(v_U.col(v_U.cols() - 1)(3), 0.));
+
+        if (p.exact_minimum_thrust)
+        {
+            p_dyn.U0_ptr = &U0;
+            p_dyn.thrust_const.resize(3, U0.size());
+
+            // Linearized Minimum Thrust
+            socp->addConstraint(cvx::greaterThan(cvx::dynpar(p_dyn.thrust_const).cwiseProduct(v_U.topRows(3)).colwise().sum(),
+                                                 cvx::dynpar(p.T_min)));
+        }
+        else
+        {
+            // Simplified Minimum Thrust
+            socp->addConstraint(cvx::greaterThan(v_U.row(2), cvx::dynpar(p.T_min)));
+        }
+
+        // Maximum Thrust
+        socp->addConstraint(cvx::lessThan(v_U.topRows(3).colwise().norm(), cvx::dynpar(p.T_max)));
+
+        // Maximum Gimbal Angle
+        socp->addConstraint(cvx::lessThan(v_U.topRows(2).colwise().norm(),
+                                          cvx::dynpar(p_dyn.gimbal_const) * v_U.row(2)));
+
+        if (p.enable_roll_control)
+        {
+            socp->addConstraint(cvx::box(-cvx::dynpar(p.t_max), v_U.row(3), cvx::dynpar(p.t_max)));
+        }
+        else
+        {
+            socp->addConstraint(cvx::equalTo(v_X.row(13), 0.));
+            socp->addConstraint(cvx::equalTo(v_U.row(3), 0.));
+        }
+    }    
+
+The code presented adds application constraints to a convex optimization problem using the CVX library. It takes as input a shared pointer to the optimization problem, the initial and final states, and the input vector at time zero. The constraints imposed include initial and final state conditions, mass, glide slope, maximum tilt angle, maximum rotation velocity, final input, minimum and maximum thrust, maximum gimbal angle, and roll control enablement. The code also includes an option for exact minimum thrust calculation.
+
+scpp::models::RocketQuat::getInitializedTrajectory
+    void RocketQuat::getInitializedTrajectory(trajectory_data_t &td)
+    {
+        for (size_t k = 0; k < td.n_X(); k++)
+        {
+            const double alpha1 = double(td.n_X() - k) / td.n_X();
+            const double alpha2 = double(k) / td.n_X();
+
+            // mass, position and linear velocity
+            td.X.at(k)(0) = alpha1 * p.x_init(0) + alpha2 * p.x_final(0);
+            td.X.at(k).segment(1, 6) = alpha1 * p.x_init.segment(1, 6) + alpha2 * p.x_final.segment(1, 6);
+
+            // do SLERP for quaternion
+            auto q0_ = p.x_init.segment<4>(7);
+            auto q1_ = p.x_final.segment<4>(7);
+            Eigen::Quaterniond q0(q0_(0), q0_(1), q0_(2), q0_(3));
+            Eigen::Quaterniond q1(q1_(0), q1_(1), q1_(2), q1_(3));
+            Eigen::Quaterniond qs = q0.slerp(alpha2, q1);
+            td.X.at(k).segment<4>(7) << qs.w(), qs.vec();
+
+            // angular velocity
+            td.X.at(k).segment<3>(11) = alpha1 * p.x_init.segment<3>(11) + alpha2 * p.x_final.segment<3>(11);
+        }
+
+        for (auto &u : td.U)
+        {
+            u << 0., 0., (p.T_max - p.T_min) / 2., 0.;
+        }
+
+        td.t = p.final_time;
+    }    
+
+The function `getInitializedTrajectory` takes a `trajectory_data_t` object as input and initializes its state vector `X` and control vector `U` for a given number of time steps. It uses a slerp algorithm to interpolate the quaternion between the initial and final orientations of the rocket. The mass, position, and linear velocity are linearly interpolated based on the time step. The angular velocity is also linearly interpolated. The final time of the trajectory is set to the final time of the rocket's motion. The control vector is initialized with a constant thrust.
+
+scpp::models::RocketQuat::getNewModelParameters
+    void RocketQuat::getNewModelParameters(param_vector_t &param)
+    {
+        param << p.alpha_m, p.g_I, p.J_B, p.r_T_B;
+
+        updateProblemParameters();
+    }    
+
+The function `getNewModelParameters` is a member function of the `RocketQuat` class. It takes a parameter vector `param` as input and fills it with the model parameters of the rocket. These parameters include the initial pitch angle `alpha_m`, the inertia tensor `g_I`, the thrust vector `J_B`, and the position vector `r_T_B` of the thrust vector relative to the body frame. The function updates the problem parameters before filling the parameter vector. This function can be used to initialize the model parameters for simulation or control purposes.
+
+scpp::models::RocketQuat::loadParameters
+    void RocketQuat::loadParameters()
+    {
+        p.loadFromFile(getParameterFolder() + "/model.info");
+    }    
+
+The code above initializes a RocketQuat object by loading parameters from a file named "model.info" located in a folder called "parameterFolder". This function is called "loadParameters()" and belongs to the RocketQuat class. The parameters are stored in a structure called "p". No further information is provided about the content or format of the parameter file.
+
+scpp::models::RocketQuat::nondimensionalize
+    void RocketQuat::nondimensionalize()
+    {
+        p.nondimensionalize();
+    }    
+
+The function `nondimensionalize()` is a member function of the `RocketQuat` class. It calls the `nondimensionalize()` function of the `p` object, which is an instance of an unspecified class. This function appears to be responsible for converting physical units to non-dimensional values, as indicated by the function name and the fact that it is called by a function related to rocket motion. The `RocketQuat` class itself seems to be related to the orientation and motion of a rocket, as suggested by its name. No further information is provided in the code or comments.
+
+scpp::models::RocketQuat::nondimensionalizeTrajectory
+    void RocketQuat::nondimensionalizeTrajectory(trajectory_data_t &td)
+    {
+        for (auto &x : td.X)
+        {
+            x(0) /= p.m_scale;
+            x.segment<6>(1) /= p.r_scale;
+        }
+        for (auto &u : td.U)
+        {
+            u.head<3>() /= p.m_scale * p.r_scale;
+            u(3) /= p.m_scale * p.r_scale * p.r_scale;
+        }
+    }    
+
+The function `nondimensionalizeTrajectory` is a member function of the `RocketQuat` class. It takes a `trajectory_data_t` object as an argument and scales its position and velocity components using the `m_scale` and `r_scale` variables stored in the `p` object. The scaling factors are used to make the trajectory dimensionless, which can be useful for certain types of analysis. The function modifies the `X` and `U` vectors within the `trajectory_data_t` object.
+
+scpp::models::RocketQuat::redimensionalize
+    void RocketQuat::redimensionalize()
+    {
+        p.redimensionalize();
+    }    
+
+The code above is a member function named "redimensionalize" of a class called "RocketQuat". This function calls another member function "redimensionalize" of a class "p". The purpose of this function is to resize the dimensions of an object represented by the "p" class. This function is likely used to adapt the "RocketQuat" class to different input sizes or to allow for dynamic memory allocation. However, the specifics of the "RocketQuat" and "p" classes are not provided in this code snippet, so further context is needed to fully understand their functionality.
+
+scpp::models::RocketQuat::redimensionalizeTrajectory
+    void RocketQuat::redimensionalizeTrajectory(trajectory_data_t &td)
+    {
+        for (auto &x : td.X)
+        {
+            x(0) *= p.m_scale;
+            x.segment<6>(1) *= p.r_scale;
+        }
+        for (auto &u : td.U)
+        {
+            u.head<3>() *= p.m_scale * p.r_scale;
+            u(3) *= p.m_scale * p.r_scale * p.r_scale;
+        }
+    }    
+
+The function `redimensionalizeTrajectory` is a member function of the `RocketQuat` class. It takes a trajectory data structure `td` as input and modifies its dimensions to match the scaling factors specified by the `p` object. The `X` and `U` vectors in `td` are scaled accordingly, with `X` being scaled by the mass and radius scales, and `U` being scaled by the mass, radius, and time scales. This function is likely used to adapt trajectories to different rocket configurations or simulation environments.
+
+scpp::models::RocketQuat::systemFlowMap
+    void RocketQuat::systemFlowMap(const state_vector_ad_t &x,
+                                   const input_vector_ad_t &u,
+                                   const param_vector_ad_t &par,
+                                   state_vector_ad_t &f)
+    {
+        using T = scalar_ad_t;
+
+        auto alpha_m = par(0);
+        auto g_I = par.segment<3>(1);
+        auto J_B_inv = par.segment<3>(4).asDiagonal().inverse();
+        auto r_T_B = par.segment<3>(7);
+        // = 10 parameters
+
+        // state variables
+        auto m = x(0);
+        auto v = x.segment<3>(4);
+        auto q = x.segment<4>(7);
+        auto w = x.segment<3>(11);
+
+        auto thrust = u.head<3>();
+        auto torque = Eigen::Matrix<T, 3, 1>(T(0.), T(0.), u(3));
+
+        auto R_I_B = Eigen::Quaternion<T>(q(0), q(1), q(2), q(3))
+                         .toRotationMatrix();
+
+        f(0) = -alpha_m * thrust.norm();
+        f.segment<3>(1) << v;
+        f.segment<3>(4) << 1. / m * R_I_B * thrust + g_I;
+        f.segment<4>(7) << T(0.5) * omegaMatrix<T>(w) * q;
+        f.segment<3>(11) << J_B_inv * (r_T_B.cross(thrust) + torque) - w.cross(w);
+    }    
+
+The function `systemFlowMap` is defined for the `RocketQuat` class, which is likely a type of rocket model. It takes as input the current state vector `x`, the input vector `u`, and the parameter vector `par`. The function calculates the derivative of the state vector `f` based on the given inputs. The function uses several variables, such as `alpha_m`, `g_I`, `J_B_inv`, `r_T_B`, `m`, `v`, `q`, `w`, `thrust`, and `torque`, which are likely related to the rocket's mass, acceleration, orientation, velocity, and thrust. The function also uses the `Quaternion` and `RotationMatrix` classes from the Eigen library to calculate the rotation matrix `R_I_B`. The function returns the derivative vector `f` containing the values for the next state vector.
+
+scpp::models::RocketQuat::updateProblemParameters
+    void RocketQuat::updateProblemParameters()
+    {
+        p_dyn.gimbal_const = std::tan(p.gimbal_max);
+        p_dyn.gs_const = std::tan(p.gamma_gs);
+        p_dyn.tilt_const = std::sqrt((1. - std::cos(p.theta_max)) / 2.);
+
+        for (size_t k = 0; k < size_t(p_dyn.thrust_const.cols()); k++)
+        {
+            p_dyn.thrust_const.col(k) = p_dyn.U0_ptr->at(k).head<3>().normalized();
+        }
+    }    
+
+The code above updates the problem parameters for a rocket's dynamic model. It initializes the gimbal constant, gs constant, and tilt constant based on the maximum gimbal angle, gamma_gs angle, and theta_max angle, respectively. It also sets the thrust vector for each engine based on the U0 vector provided by the U0_ptr object. These parameters are used in the dynamic equations of motion for the rocket.
+

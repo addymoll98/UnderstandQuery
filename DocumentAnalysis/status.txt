@@ -1,0 +1,5 @@
+I'm relly not getting good results trying to compare the DAFMANs to the CERT C++
+documents. Part of the issue I think is that they are such different scopes. The
+DAFMAN are very broad, whereas the CERT C++ are very specific examples of specific
+things. I'm thinking I'll need to take a different approach. This approach of 
+comparing each thing to each other isn't going to work well. 
