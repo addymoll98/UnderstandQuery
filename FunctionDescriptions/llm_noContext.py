@@ -5,17 +5,13 @@ def describe_functions(sorted):
 
     ### FOR RUNNING WITH HUGGINGFACE ###
 
-    # from langchain_community.llms import HuggingFaceHub
-    # os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
-    # llm = HuggingFaceHub(
+    # from langchain_huggingface import HuggingFaceEndpoint
+    # llm = HuggingFaceEndpoint(
     #     repo_id="HuggingFaceH4/zephyr-7b-beta",
     #     task="text-generation",
-    #     model_kwargs={
-    #         "max_new_tokens": 512,
-    #         "top_k": 30,
-    #         "temperature": 0.1,
-    #         "repetition_penalty": 1.03,
-    #     },
+    #     max_new_tokens=512,
+    #     do_sample=False,
+    #     repetition_penalty=1.03,
     # )
         
     #####################################

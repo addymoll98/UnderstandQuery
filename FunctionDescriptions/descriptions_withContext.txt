@@ -1,0 +1,71 @@
+scpp::SCvxAlgorithm::SCvxAlgorithm
+
+    Example: 
+    "The function `readConfig(string filename)` reads a configuration file at the given filename and populates the private `config` class member. It skips empty lines and lines starting with '#'. If the end of file is reached without finding the 'EOF' marker, an error flag is raised. The function returns immediately if the file does not exist or the file cannot be opened for reading." 
+  
+    Example: 
+    "The `SCvxAlgorithm` constructor initializes a `Model` pointer and loads configuration parameters from disk. It reserves memory for an array of trajectories to accumulate during optimization, with a maximum capacity based on `max_iterations`. The constructor does not perform any computations."
+
+scpp::SCvxAlgorithm::getAllSolutions
+
+    In this C++ code, the function `getAllSolutions` is called to obtain all possible solutions for a given problem. If the Boolean flag `nondimensionalize` is true, then the trajectory data stored in `all_td` undergoes a process of non-dimensionalization before being added to a container of solutions `all_trajectories`. Otherwise, the original trajectory data is simply copied over to `all_trajectories`. The function `redimensionalizeTrajectory` is a member function of an internal class called `model`, and is used for the non-dimensionalization process.
+
+scpp::SCvxAlgorithm::getNonlinearCost
+
+    In a nutshell, this function computes the nonlinear cost associated with the dynamics of a model, which is the sum of virtual control costs incurred by simulating the model from each point in time between the known input and output at that time to the next known output. The cost is calculated using the lpNorm<1> metric. If interpolation is enabled, the function interpolates the input between these two points.
+    
+    This function's return value is a double, with no bounds or restrictions on its magnitude. It may be used in conjunction with other optimization functions to minimize the total cost of the trajectory through this model. 
+
+
+scpp::SCvxAlgorithm::getSolution
+
+    The function getSolution is a const member function of the SCvxAlgorithm class. It returns a trajectory_data_t structure named trajectory, which contains information about the solution path. This function gets its data from the private member variable td, which represents the trajectory that meets certain optimization criteria. The function itself is a wrapper for td and is used to retrieve the calculated solution at any point in time. This function does not modify any global variables or take any parameters as input. It only returns the stored solution path as defined by td.
+
+scpp::SCvxAlgorithm::initialize
+
+    The initialization function of the SCvxAlgorithm class initializes the dynamic model, the temporal difference (TD) learning algorithm, and the dual dynamical programming (DDP) algorithm. It constructs the SCvxProblem object, adds application constraints to it, and sets up the solver object using CVX. The initialization function also measures the time taken by the model to initialize.
+
+scpp::SCvxAlgorithm::iterate
+
+   The SCvxAlgorithm function iteratively solves a nonlinear optimization problem using a multiple shooting discretization method and trust region Newton iterations to minimize a nonlinear cost function while satisfying linearized constraints. It reads in an input model, computes an initial guess for the trajectory states, and calls an external solver to compute an approximate solution. The function then repeatedly compares the actual and predicted changes in nonlinear and linear costs until convergence is reached or the trust region radius becomes too large. The function also measures the time taken by each phase of computation using the Eigen library's tic() and toc() functions, and prints detailed performance data at key junctures.
+
+scpp::SCvxAlgorithm::loadParameters
+
+    Here's my try:
+    In this function called loadParameters, the model's parameter folder is accessed to retrieve configuration settings for the SCvx algorithm implemented in the class. Specifically, values for K, nondimensionalize, max_iterations, alpha, beta, rho_0, rho_1, rho_2, change_threshold, weight_virtual_control, and trust_region are retrieved from a parameter server file named SCvx.info in the model's folder using the ParameterServer class.
+
+scpp::SCvxAlgorithm::readSolution
+
+    This function reads the solution of a optimization problem using the `SCvx` library for semidefinite programming. The solution is stored in two matrices `X` and `U`, which are obtained by accessing variables in the `socp` class provided by the library. Each column of matrix `X` contains the values of a decision variable, while each column of matrix `U` corresponds to a slack variable. The function copies the contents of matrices `X` and `U` into two class-level variables named `td.X` and `td.U`, respectively. These variables are part of a data structure called `TD` that represents the decision variables and slack variables obtained from the solution of an optimization problem. This specific function is used in the context of a more complex optimization algorithm that involves multiple iterations and optimization problems, where the `TD` variable is updated at each iteration. The `SCvx` library is commonly used for semidefinite programming, which is an important subfield of optimization theory. It has been shown to be very useful for solving large-scale convex optimization problems in various application areas such as finance, engineering, and computer science.
+
+scpp::SCvxAlgorithm::solve
+
+    The function, `solve()`, initializes and solves a dynamic model using an optimization algorithm to iteratively adjust model parameters based on specified data, as defined by its arguments (`model`, `data`, `params`, etc.). It first nondimensionalizes the model and data (if specified), loads necessary parameters (if not specified), and updates the initialized trajectory with the provided data. The optimization algorithm is then called to iteratively adjust parameters based on the provided data, with the ability to perform a warm start if specified. If convergence is achieved within `max_iterations`, the final solution parameters and trajectory are returned. The function outputs runtime information (including total time) for debugging purposes. The optimization algorithm used here is not defined in this context, but can be assumed to be a generic, iterative optimization technique with an objective function based on the provided data and model structure.
+
+scpp::buildSCvxProblem
+
+    Example: 
+    The provided C++ function builds an optimization problem for sequential control and virtual control using CVX to minimize a cost function subject to constraints in state space. It takes trust regions and weights for virtual control as arguments and returns a shared pointer to the optimization problem object. The function populates the problem with variables for states, inputs, and virtual control, as well as equality constraints from linearized models and virtual control norms, and adds cost terms for both input trust region and minimizing virtual control. It also imposes constraints on virtual control bounds and a sum constraint for its norm. Dependencies are the Model class with state and input dimensions and matrices for the linearized model, as well as the trajectory_data and discretization_data classes for the optimization problem's time horizon and discretization resolution, respectively. The function returns a shared pointer to the built CVX optimization problem object. 
+    Alternate: This C++ function builds an optimization problem with CVX using trust regions and virtual control weights for a sequential control application. It takes dependencies from the Model class for state and input dimensions and matrices of linearized models, as well as the trajectory_data and discretization_data classes for the optimization problem
+
+scpp::discretization::exactLinearDiscretization
+
+    Here's a template to follow: 
+    
+    [Function Name] calculates [Purpose of Function]. It takes [Input Parameters] as arguments and returns [Return Type]. This function is dependent on [Class/Functions Used]. Within this function, it performs the following steps: [Step-by-step process].
+
+    For example: 
+    
+    The function 'calculateAverage(vector<int> arr)' calculates the average of the given array 'arr'. This function is dependent on 'vector' class. Inside this function, it iteratively sums up all the elements in 'arr' and divides it by the total number of elements to calculate the average.
+    Another example: 
+    
+    The function 'calculateDistance(Point a, Point b)' calculates the distance between two points 'a' and 'b'. This function is dependent on 'Point' class which has two variables 'x' and 'y'. Inside this function, it finds the difference of x-coordinate and y-coordinate of both points, square them and then add them to find the total square. After that, it takes the square root to find the actual distance between two points
+
+scpp::discretization::multipleShooting
+
+    Example: 
+    A simple calculator is implemented using this C++ class library. It takes two double-precision floating point numbers as input and returns their sum using an overloaded operator+. The library also includes basic arithmetic operators, such as subtraction (-), multiplication (*), and division (/). Error checking is done for zero or negative dividends. The library is fully compliant with ANSI C++ standards and can be easily integrated into any C++ project.
+
+    Paraphrase: 
+    This C++ function, called "multipleShooting", utilizes a model input and output trajectory data, as well as discretization information to perform multiple shooting optimization. The function has three variations based on whether the discretization data interpolates input or has variable time steps. The provided context is from related functions in the codebase, but no specific dependencies are mentioned. No further details about the model, trajectory, or discretization data are provided.
+
