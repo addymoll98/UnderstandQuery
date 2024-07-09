@@ -1,5 +1,6 @@
-### FOR RUNNING WITH HUGGINGFACE ###
+import sys
 
+### FOR RUNNING WITH HUGGINGFACE ###
 import os;
 from langchain_huggingface import HuggingFaceEndpoint
 
@@ -28,10 +29,13 @@ llm = HuggingFaceEndpoint(
 # from langchain_core.prompts import PromptTemplate    
 # callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
-# zephr_path = "/Users/adelinemoll/Documents/LLM/LangChain/zephyr-7b-beta.Q2_K.gguf"
+# zephr_path = "/Users/adelinemoll/Documents/LLM/LangChain/zephyr-7b-beta.Q2_K.gguf" # Mac Path
+# zephr_path = "/home/adelinemoll/Public/LLM/zephyr-7b-beta.Q2_K.gguf" # Linux Path
 # llm = LlamaCpp(model_path=zephr_path, verbose=True, n_ctx=4096, callback_manager=callback_manager)
 
 #####################################
+
+userQuestion = sys.argv[1]
 
 contents = []
 while True:
@@ -60,4 +64,5 @@ SUMMARIZE_CODE_PROMPT = """
 
 contents = contents + "\n" + SUMMARIZE_CODE_PROMPT
 result = llm.invoke(contents)
-print(result)
+print("Question: " + userQuestion)
+print("LLM Response: " + result)
