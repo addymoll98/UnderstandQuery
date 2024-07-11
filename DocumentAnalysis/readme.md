@@ -1,3 +1,0 @@
-Some notes:
-
-I have the seperation of DAFMAN into chunks in a seperate program. After it seperated it into chunks, I went through and cleaned it up, getting rid on all the "deleted" and such, recombining ones that make sense to be together. Once I have this formated txt document, the compareRequirements.py goes through and actually calls the LLM, preventing the LLM from being called for all the miscelaneous ones that don't make sense. I also removed requirements that are things not relevent to us, such as nuclear bombs, requriements for independence, etc. 
