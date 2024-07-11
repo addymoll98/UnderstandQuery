@@ -1,11 +1,11 @@
-import sys
+# You can run this program with HuggingFace (not local), Llamafile, or Llamacpp (both local)
+# Toggle between the below comments to switch between models
 
 ### FOR RUNNING WITH HUGGINGFACE ###
-import os;
+
 from langchain_huggingface import HuggingFaceEndpoint
 
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
-llmHUGGINGFACE = HuggingFaceEndpoint(
+llm = HuggingFaceEndpoint(
     repo_id="HuggingFaceH4/zephyr-7b-beta",
     task="text-generation",
     temperature= 0.1,
@@ -14,33 +14,23 @@ llmHUGGINGFACE = HuggingFaceEndpoint(
     repetition_penalty= 1.03
 )
 
-### FOR RUNNING WITH OPENAI ###
-
-# import os
-# os.environ["OPENAI_API_KEY"] = ""
-# from langchain_openai import OpenAI
-# llmOPENAI = OpenAI(openai_api_key="OPENAP_API_KEY", openai_organization="proj_RRvxgAHHyE2h3ZOVM07xZGIZ")
-
 ##### FOR RUNNING WITH LLAMAFILE #####
 
 # from langchain_community.llms.llamafile import Llamafile
-# llmLLAMAFILE = Llamafile()
+
+# llm = Llamafile()
 
 #### FOR RUNNING WITH LLAMACPP #####
 
-from langchain_community.llms import LlamaCpp
-from langchain_core.callbacks import CallbackManager, StreamingStdOutCallbackHandler
-from langchain_core.prompts import PromptTemplate    
-callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+# from langchain_community.llms import LlamaCpp
 
-zephr_path = "/Users/adelinemoll/Documents/LLM/zephyr-7b-beta.Q2_K.gguf" # Mac Path
-# zephr_path = "/home/adelinemoll/Public/LLM/zephyr-7b-beta.Q2_K.gguf" # Linux Path
-llmLLAMACPP = LlamaCpp(model_path=zephr_path, verbose=False, n_ctx=4096)
+# zephr_path = "/Users/adelinemoll/Documents/LLM/zephyr-7b-beta.Q2_K.gguf" # Mac Path, REPLACE WITH YOUR PATH TO YOUR LOCAL LLM MODEL
+# # zephr_path = "/home/adelinemoll/Public/LLM/zephyr-7b-beta.Q2_K.gguf" # Linux Path
+# llm = LlamaCpp(model_path=zephr_path, verbose=False, n_ctx=4096)
 
 #####################################
 
-
-
+# Input the highlighted code snippet from Understand into Contents
 contents = []
 while True:
     try:
@@ -51,6 +41,7 @@ while True:
 
 contents= '\n'.join(contents)
 
+# Set up the prompt templates for summarizing the code or for asking a question about the code.
 SUMMARIZE_CODE_PROMPT_TEMPLATE = """
 Generate a concise summary of the provided C++ code. Keep the summary to 5 sentences or less. 
 
@@ -81,15 +72,17 @@ Question:
 Answer:
 """
 
-userOption = sys.argv[1]
+# Get the User Option and Question from Understand
+import sys
+userOption = sys.argv[1] # In Understand, the user is prompted to select "Summarize Code" or "Ask a question"
 if userOption == "Ask a question":
-    userQuestion = sys.argv[2]
+    userQuestion = sys.argv[2] # This is the users question from Understand
     prompt = QUESTION_PROMPT_TEMPLATE.format(code=contents, question=userQuestion)
     print("Question: " + userQuestion)
 else:
     prompt = SUMMARIZE_CODE_PROMPT_TEMPLATE.format(code=contents)
     print("Here is a summary of this code: ")
 
-# result = llmLLAMACPP.invoke(contents)
-result = llmHUGGINGFACE.invoke(prompt)
+# Invoke the LLM and print the response
+result = llm.invoke(prompt)
 print("LLM Response: " + result)
