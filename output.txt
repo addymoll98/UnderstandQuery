@@ -1,0 +1,508 @@
+{'input': 'Model::input_vector_t interpolatedInput(const Model::input_vector_v_t &U, double t,
+ double total_time, bool first_order_hold)
+{
+ const size_t K = U.size();
+ const double time_step = total_time / (K - 1);
+ const size_t i = std::min(size_t(t / time_step), K - 2);
+ const Model::input_vector_t u0 = U.at(i);
+ const Model::input_vector_t u1 = first_order_hold ? U.at(i + 1) : u0;
+
+ const double t_intermediate = std::fmod(t, time_step) / time_step;
+ const Model::input_vector_t u = u0 + (u1 - u0) * t_intermediate;
+
+ return u;
+}\nWhat does this snippet of code do?', 'context': [Document(page_content='#include "commonFunctions.hpp"
+\nnamespace scpp
+{
+\nModel::input_vector_t interpolatedInput(const Model::input_vector_v_t &U, double t,
+ double total_time, bool first_order_hold)
+{
+ const size_t K = U.size();
+ const double time_step = total_time / (K - 1);
+ const size_t i = std::min(size_t(t / time_step), K - 2);
+ const Model::input_vector_t u0 = U.at(i);
+ const Model::input_vector_t u1 = first_order_hold ? U.at(i + 1) : u0;
+
+ const double t_intermediate = std::fmod(t, time_step) / time_step;
+ const Model::input_vector_t u = u0 + (u1 - u0) * t_intermediate;
+
+ return u;
+}', metadata={'language': 'cpp', 'source': '/Users/adelinemoll/Documents/LLM/LangChain/SCpp/scpp/src/commonFunctions.cpp'}), Document(page_content='void TrajectoryData::initialize(size_t K, bool interpolate_input)
+{
+ X.resize(K);
+ U.resize(interpolate_input ? K : K - 1);
+ t = 0.;
+}
+\ntemplate \nbool TrajectoryData::interpolatedInput() const
+{
+ return U.size() == X.size();
+}
+\ntemplate \ntypename Model::input_vector_t TrajectoryData::inputAtTime(double t) const
+{
+ t = std::clamp(t, 0., this->t);
+
+ if (t == this->t)
+ {
+ return U.back();
+ }
+
+ const double dt = this->t / (n_X() - 1);
+ double interpolate_value = std::fmod(t, dt) / dt;
+ const size_t i = t / dt;
+
+ const typename Model::input_vector_t u0 = U.at(i);
+ const typename Model::input_vector_t u1 = interpolatedInput() ? U.at(i + 1) : U.at(i);
+
+ return u0 + interpolate_value * (u1 - u0);
+}
+\ntemplate \ntypename Model::state_vector_t TrajectoryData::approxStateAtTime(double t) const
+{
+ t = std::clamp(t, 0., this->t);', metadata={'language': 'cpp', 'source': '/Users/adelinemoll/Documents/LLM/LangChain/SCpp/scpp_core/include/trajectoryData.hpp'}), Document(page_content='void ODE::operator()(const ode_matrix_t &V, ode_matrix_t &dVdt, const double t)
+{
+ const Model::state_vector_t x = V.col(0);
+
+ Model::input_vector_t u;
+ if constexpr (INTERPOLATE_INPUT)
+ {
+ u = u_t0 + t / dt * (u_t1 - u_t0);
+ }
+ else
+ {
+ u = u_t0;
+ }
+
+ Model::state_vector_t f;
+ Model::state_matrix_t A;
+ Model::control_matrix_t B;
+ model->computef(x, u, f);
+ model->computeJacobians(x, u, A, B);
+
+ if constexpr (VARIABLE_TIME)
+ {
+ A *= time;
+ B *= time;
+ }
+
+ const Model::state_matrix_t Phi_A_xi = V.template block(0, 1);
+ const Model::state_matrix_t Phi_A_xi_inverse = Phi_A_xi.inverse();
+
+ size_t cols = 0;
+
+ // state
+ if constexpr (VARIABLE_TIME)
+ {
+ dVdt.template block(0, cols) = time * f;
+ }
+ else
+ {
+ dVdt.template block(0, cols) = f;
+ }
+ cols += 1;', metadata={'language': 'cpp', 'source': '/Users/adelinemoll/Documents/LLM/LangChain/SCpp/scpp_core/include/discretizationImplementation.hpp'}), Document(page_content='int main()
+{
+ auto model = std::make_shared();
+ model->loadParameters();
+
+ scpp::SCAlgorithm solver(model);
+
+ solver.initialize();
+
+ trajectory_data_t td;
+
+ solver.solve();
+ solver.getSolution(td);
+
+ // calculate LQR gains
+ fmt::print("\
+");
+ const double gains_timer = tic();
+ scpp::LQRTracker tracker(model, td);
+ fmt::print("{: t_sim;
+ const double t_max = td.t;
+ const double write_steps = 30;
+
+ Model::state_vector_t x = model->p.x_init;
+
+ const size_t initial_error = (x - model->p.x_final).norm();
+
+ double t = 0.;
+ size_t sim_step = 0;
+
+ while (t ::initialize(size_t K, bool interpolate_input, bool free_final_time)
+{
+ A.resize(K - 1);
+
+ B.resize(K - 1);
+
+ if (interpolate_input)
+ {
+ C.resize(K - 1);
+ }
+ else
+ {
+ C.clear();
+ }
+
+ if (free_final_time)
+ {
+ s.resize(K - 1);
+ }
+ else
+ {
+ s.clear();
+ }
+
+ z.resize(K - 1);
+}
+\ntemplate\nbool DiscretizationData::interpolatedInput() const
+{
+ return not C.empty();
+}
+\ntemplate\nbool DiscretizationData::variableTime() const
+{
+ return not s.empty();
+}
+\ntemplate\nsize_t DiscretizationData::n_X() const
+{
+ return A.size();
+}
+\ntemplate\nsize_t DiscretizationData::n_U() const
+{
+ return B.size();
+}
+
+} // namespace scpp', metadata={'language': 'cpp', 'source': '/Users/adelinemoll/Documents/LLM/LangChain/SCpp/scpp_core/include/discretizationData.hpp'}), Document(page_content='class ODE
+{\npublic:
+ ODE(Model::ptr_t model, double dt, const Model::input_vector_t &u0, const Model::input_vector_t &u1);
+ void operator()(const Model::state_vector_t &f, Model::state_vector_t &dfdt, const double t);
+\nprivate:
+ Model::ptr_t model;
+ Model::input_vector_t u0, u1;
+ double dt;
+};
+\nODE::ODE(Model::ptr_t model, double dt, const Model::input_vector_t &u0, const Model::input_vector_t &u1)
+ : model(model), u0(u0), u1(u1), dt(dt) {}
+\nvoid ODE::operator()(const Model::state_vector_t &f, Model::state_vector_t &dfdt, const double t)
+{
+ Model::input_vector_t u = u0 + t / dt * (u1 - u0);
+ model->computef(f, u, dfdt);
+}', metadata={'language': 'cpp', 'source': '/Users/adelinemoll/Documents/LLM/LangChain/SCpp/scpp_core/src/simulation.cpp'}), Document(page_content='void LQRTracker::getInput(double t, const Model::state_vector_t &x, Model::input_vector_t &u) const
+{
+ t = std::clamp(t, 0., td.t);
+ const Model::state_vector_t x_target = td.approxStateAtTime(t);
+ const Model::input_vector_t u_target = td.inputAtTime(t);
+ const Model::feedback_matrix_t K = interpolateGains(t);
+
+ u = -K * (x - x_target) + u_target;
+}
+\nModel::feedback_matrix_t LQRTracker::interpolateGains(double t) const
+{
+ t = std::clamp(t, 0., td.t);
+
+ const double dt = td.t / (td.n_X() - 1);
+ double interpolate_value = std::fmod(t, dt) / dt;
+ const size_t i = t / dt;
+
+ const Model::feedback_matrix_t K0 = gains.at(i);
+ const Model::feedback_matrix_t K1 = td.interpolatedInput() ? gains.at(std::min(gains.size() - 1, i + 1)) : gains.at(i);
+
+ return K0 + interpolate_value * (K1 - K0);
+}
+
+} // namespace scpp', metadata={'language': 'cpp', 'source': '/Users/adelinemoll/Documents/LLM/LangChain/SCpp/scpp_core/src/LQRTracker.cpp'}), Document(page_content='// move solve_time forward
+ scpp::simulate(model, timestep, u, u, x);
+ t += timestep;
+
+ X_sim.push_back(x);
+ U_sim.push_back(u);
+ t_sim.push_back(t);
+
+ sim_step++;
+
+ if (x.hasNaN())
+ {
+ throw std::runtime_error("State has NaN.");
+ }
+ }
+
+ const size_t final_error = (x - model->p.x_final).norm();
+
+ fmt::print("\
+");
+ fmt::print("Simulating trajectory.\
+");
+ fmt::print("Finished after {} steps.\
+", sim_step + 1);
+ fmt::print("Final error: {:.4f}%.\
+", 100. * final_error / initial_error);
+ fmt::print("{:commonFunctions.hpp"
+\nnamespace scpp
+{
+\nModel::input_vector_t interpolatedInput(const Model::input_vector_v_t &U, double t,
+ double total_time, bool first_order_hold)
+{
+ const size_t K = U.size();
+ const double time_step = total_time / (K - 1);
+ const size_t i = std::min(size_t(t / time_step), K - 2);
+ const Model::input_vector_t u0 = U.at(i);
+ const Model::input_vector_t u1 = first_order_hold ? U.at(i + 1) : u0;
+
+ const double t_intermediate = std::fmod(t, time_step) / time_step;
+ const Model::input_vector_t u = u0 + (u1 - u0) * t_intermediate;
+
+ return u;
+}
+\nvoid TrajectoryData::initialize(size_t K, bool interpolate_input)
+{
+ X.resize(K);
+ U.resize(interpolate_input ? K : K - 1);
+ t = 0.;
+}
+\ntemplate \nbool TrajectoryData::interpolatedInput() const
+{
+ return U.size() == X.size();
+}
+\ntemplate \ntypename Model::input_vector_t TrajectoryData::inputAtTime(double t) const
+{
+ t = std::clamp(t, 0., this->t);
+
+ if (t == this->t)
+ {
+ return U.back();
+ }
+
+ const double dt = this->t / (n_X() - 1);
+ double interpolate_value = std::fmod(t, dt) / dt;
+ const size_t i = t / dt;
+
+ const typename Model::input_vector_t u0 = U.at(i);
+ const typename Model::input_vector_t u1 = interpolatedInput() ? U.at(i + 1) : U.at(i);
+
+ return u0 + interpolate_value * (u1 - u0);
+}
+\ntemplate \ntypename Model::state_vector_t TrajectoryData::approxStateAtTime(double t) const
+{
+ t = std::clamp(t, 0., this->t);
+\nvoid ODE::operator()(const ode_matrix_t &V, ode_matrix_t &dVdt, const double t)
+{
+ const Model::state_vector_t x = V.col(0);
+
+ Model::input_vector_t u;
+ if constexpr (INTERPOLATE_INPUT)
+ {
+ u = u_t0 + t / dt * (u_t1 - u_t0);
+ }
+ else
+ {
+ u = u_t0;
+ }
+
+ Model::state_vector_t f;
+ Model::state_matrix_t A;
+ Model::control_matrix_t B;
+ model->computef(x, u, f);
+ model->computeJacobians(x, u, A, B);
+
+ if constexpr (VARIABLE_TIME)
+ {
+ A *= time;
+ B *= time;
+ }
+
+ const Model::state_matrix_t Phi_A_xi = V.template block(0, 1);
+ const Model::state_matrix_t Phi_A_xi_inverse = Phi_A_xi.inverse();
+
+ size_t cols = 0;
+
+ // state
+ if constexpr (VARIABLE_TIME)
+ {
+ dVdt.template block(0, cols) = time * f;
+ }
+ else
+ {
+ dVdt.template block(0, cols) = f;
+ }
+ cols += 1;
+\nint main()
+{
+ auto model = std::make_shared();
+ model->loadParameters();
+
+ scpp::SCAlgorithm solver(model);
+
+ solver.initialize();
+
+ trajectory_data_t td;
+
+ solver.solve();
+ solver.getSolution(td);
+
+ // calculate LQR gains
+ fmt::print("\
+");
+ const double gains_timer = tic();
+ scpp::LQRTracker tracker(model, td);
+ fmt::print("{: t_sim;
+ const double t_max = td.t;
+ const double write_steps = 30;
+
+ Model::state_vector_t x = model->p.x_init;
+
+ const size_t initial_error = (x - model->p.x_final).norm();
+
+ double t = 0.;
+ size_t sim_step = 0;
+
+ while (t ::initialize(size_t K, bool interpolate_input, bool free_final_time)
+{
+ A.resize(K - 1);
+
+ B.resize(K - 1);
+
+ if (interpolate_input)
+ {
+ C.resize(K - 1);
+ }
+ else
+ {
+ C.clear();
+ }
+
+ if (free_final_time)
+ {
+ s.resize(K - 1);
+ }
+ else
+ {
+ s.clear();
+ }
+
+ z.resize(K - 1);
+}
+\ntemplate\nbool DiscretizationData::interpolatedInput() const
+{
+ return not C.empty();
+}
+\ntemplate\nbool DiscretizationData::variableTime() const
+{
+ return not s.empty();
+}
+\ntemplate\nsize_t DiscretizationData::n_X() const
+{
+ return A.size();
+}
+\ntemplate\nsize_t DiscretizationData::n_U() const
+{
+ return B.size();
+}
+
+} // namespace scpp
+\nclass ODE
+{\npublic:
+ ODE(Model::ptr_t model, double dt, const Model::input_vector_t &u0, const Model::input_vector_t &u1);
+ void operator()(const Model::state_vector_t &f, Model::state_vector_t &dfdt, const double t);
+\nprivate:
+ Model::ptr_t model;
+ Model::input_vector_t u0, u1;
+ double dt;
+};
+\nODE::ODE(Model::ptr_t model, double dt, const Model::input_vector_t &u0, const Model::input_vector_t &u1)
+ : model(model), u0(u0), u1(u1), dt(dt) {}
+\nvoid ODE::operator()(const Model::state_vector_t &f, Model::state_vector_t &dfdt, const double t)
+{
+ Model::input_vector_t u = u0 + t / dt * (u1 - u0);
+ model->computef(f, u, dfdt);
+}
+\nvoid LQRTracker::getInput(double t, const Model::state_vector_t &x, Model::input_vector_t &u) const
+{
+ t = std::clamp(t, 0., td.t);
+ const Model::state_vector_t x_target = td.approxStateAtTime(t);
+ const Model::input_vector_t u_target = td.inputAtTime(t);
+ const Model::feedback_matrix_t K = interpolateGains(t);
+
+ u = -K * (x - x_target) + u_target;
+}
+\nModel::feedback_matrix_t LQRTracker::interpolateGains(double t) const
+{
+ t = std::clamp(t, 0., td.t);
+
+ const double dt = td.t / (td.n_X() - 1);
+ double interpolate_value = std::fmod(t, dt) / dt;
+ const size_t i = t / dt;
+
+ const Model::feedback_matrix_t K0 = gains.at(i);
+ const Model::feedback_matrix_t K1 = td.interpolatedInput() ? gains.at(std::min(gains.size() - 1, i + 1)) : gains.at(i);
+
+ return K0 + interpolate_value * (K1 - K0);
+}
+
+} // namespace scpp
+
+// move solve_time forward
+ scpp::simulate(model, timestep, u, u, x);
+ t += timestep;
+
+ X_sim.push_back(x);
+ U_sim.push_back(u);
+ t_sim.push_back(t);
+
+ sim_step++;
+
+ if (x.hasNaN())
+ {
+ throw std::runtime_error("State has NaN.");
+ }
+ }
+
+ const size_t final_error = (x - model->p.x_final).norm();
+
+ fmt::print("\
+");
+ fmt::print("Simulating trajectory.\
+");
+ fmt::print("Finished after {} steps.\
+", sim_step + 1);
+ fmt::print("Final error: {:.4f}%.\
+", 100. * final_error / initial_error);
+ fmt::print("{:commonFunctions.hpp"
+\nnamespace scpp
+{
+\nModel::input_vector_t interpolatedInput(const Model::input_vector_v_t &U, double t,
+ double total_time, bool first_order_hold)
+{
+ const size_t K = U.size();
+ const double time_step = total_time / (K - 1);
+ const size_t i = std::min(size_t(t / time_step), K - 2);
+ const Model::input_vector_t u0 = U.at(i);
+ const Model::input_vector_t u1 = first_order_hold ? U.at(i + 1) : u0;
+
+ const double t_intermediate = std::fmod(t, time_step) / time_step;
+ const Model::input_vector_t u = u0 + (u1 - u0) * t_intermediate;
+
+ return u;
+}
+\nvoid TrajectoryData::initialize(size_t K, bool interpolate_input)
+{
+ X.resize(K);
+ U.resize(interpolate_input ? K : K - 1);
+ t = 0.;
+}
+\ntemplate \nbool TrajectoryData::interpolatedInput() const
+{
+ return U.size() == X.size();
+}
+\ntemplate \ntypename Model::input_vector_t TrajectoryData::inputAtTime(double t) const
+{
+ t = std::clamp(t, 0., this->t);
+
+ if (t == this->t)
+ {
+ return U.back();
+ }
+
+ const double dt = this->t / (n_X() - 1);
+ double interpolate_value = std::fmod(t, dt) / dt;
+ const size_t i = t / dt;
+
+ const typename Model::input_vector_t u0 = U.at(i);
+ const typename Model::input_vector_t u1 = interpolatedInput() ? U.at'} 

@@ -1,14 +1,16 @@
+import sys
 import os
 from langchain_community.document_loaders.generic import GenericLoader
 from langchain_community.document_loaders.parsers import LanguageParser
 from langchain.text_splitter import Language, RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings.sentence_transformer import SentenceTransformerEmbeddings
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.llms.llamafile import Llamafile
+# from langchain_huggingface import HuggingFaceEmbeddings
+# from langchain_community.llms.llamafile import Llamafile
 
 # Construct the full path to your repository
-repo_path = "/Users/adelinemoll/Documents/LLM/LangChain/SCpp"
+repo_path = sys.argv[1]
+print(f"Repo Path: {repo_path}")
 
 # print(f"Repository path: {repo_path}")
 
@@ -75,19 +77,23 @@ from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
 
+### FOR RUNNING WITH OPENAI ###
+
+# import os
+# os.environ["OPENAI_API_KEY"] = ""
+# from langchain_core.prompts import PromptTemplate
+# from langchain_openai import OpenAI
+# llm = OpenAI(openai_api_key="OPENAP_API_KEY")
+
 ### FOR RUNNING WITH HUGGINGFACE ###
 
-from langchain_community.llms import HuggingFaceHub
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
-llm = HuggingFaceHub(
+from langchain_huggingface import HuggingFaceEndpoint
+llmHUGGINGFACE = HuggingFaceEndpoint(
     repo_id="HuggingFaceH4/zephyr-7b-beta",
     task="text-generation",
-    model_kwargs={
-        "max_new_tokens": 512,
-        "top_k": 30,
-        "temperature": 0.1,
-        "repetition_penalty": 1.03,
-    },
+    max_new_tokens=512,
+    do_sample=False,
+    repetition_penalty=1.03,
 )
 
 #####################################
@@ -105,10 +111,13 @@ llm = HuggingFaceHub(
 # from langchain_core.prompts import PromptTemplate    
 # callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
-# zephr_path = "/Users/adelinemoll/Documents/LLM/LangChain/zephyr-7b-beta.Q2_K.gguf"
-# llm = LlamaCpp(model_path=zephr_path, verbose=True, n_ctx=4096, callback_manager=callback_manager)
+# zephr_path = "/Users/adelinemoll/Documents/LLM/zephyr-7b-beta.Q2_K.gguf"
+# llmLLAMACPP = LlamaCpp(model_path=zephr_path, verbose=True, n_ctx=4096, callback_manager=callback_manager)
 
 ####################################
+
+llm = llmHUGGINGFACE
+# llm = llmLLAMACPP
 
 prompt = ChatPromptTemplate.from_messages(
     [
@@ -116,7 +125,7 @@ prompt = ChatPromptTemplate.from_messages(
         ("user", "{input}"),
         (
             "user",
-            "Given the provided C++ function, generate a search query to look up portions of the codebase that are related to this function.",
+            "Given the provided user question, which includes C++ code, generate a search query to look up portions of the codebase that are related to this question.",
         ),
     ]
 )
@@ -127,7 +136,14 @@ prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            "Summarize the function provided by the user based on this context from the entire codebase:\n\n{context}",
+            """
+A user is asking a question about a snippet of C++ code within their codebase.
+Your job is to anwer the users question as simply and concisely as possible.
+Use the provided context to help you answer the quesion.
+If you cannot answer, do not make up an answer, instead, respond with 
+"I do not have enough context to answer this question". \n\n{context}
+""",
+            # "Summarize the function provided by the user based on this context from the entire codebase:\n\n{context}",
         ),
         ("placeholder", "{chat_history}"),
         ("user", "{input}"),
@@ -135,27 +151,23 @@ prompt = ChatPromptTemplate.from_messages(
 )
 document_chain = create_stuff_documents_chain(llm, prompt)
 
-# contents = []
-# while True:
-#     try:
-#         line = input()
-#     except EOFError:
-#         break
-#     contents.append(line)
 
-# contents= '\n'.join(contents)
+contents = []
+while True:
+    try:
+        line = input()
+    except EOFError:
+        break
+    contents.append(line)
 
-contents = """
-Model::input_vector_t interpolatedInput(const Model::input_vector_v_t &U, double t, double total_time, bool first_order_hold) { const size_t K = U.size(); const double time_step = total_time / (K - 1); const size_t i = std::min(size_t(t / time_step), K - 2); const Model::input_vector_t u0 = U.at(i); const Model::input_vector_t u1 = first_order_hold ? U.at(i + 1) : u0; const double t_intermediate = std::fmod(t, time_step) / time_step; const Model::input_vector_t u = u0 + (u1 - u0) * t_intermediate; return u; } 
-"""
+contents= '\n'.join(contents)
 
-import sys
-myPath = sys.argv[1]
-print(myPath)
-userQuestion = sys.argv[2]
-print(userQuestion)
+# contents = """
+# Model::input_vector_t interpolatedInput(const Model::input_vector_v_t &U, double t, double total_time, bool first_order_hold) { const size_t K = U.size(); const double time_step = total_time / (K - 1); const size_t i = std::min(size_t(t / time_step), K - 2); const Model::input_vector_t u0 = U.at(i); const Model::input_vector_t u1 = first_order_hold ? U.at(i + 1) : u0; const double t_intermediate = std::fmod(t, time_step) / time_step; const Model::input_vector_t u = u0 + (u1 - u0) * t_intermediate; return u; } 
+# """
 
-SUMMARIZE_CODE_PROMPT = """
+
+SUMMARIZE_CODE_PROMPT_TEMPLATE = """
 Generate a concise summary of the provided C++ function. 
 Use the provided context from other parts of the codebase if it helps summarize the function. 
 Keep the summary to 5 sentences or less. 
@@ -166,13 +178,39 @@ Instructions:
 - Describe dependencies, important functions and classes, and relevant information from comments.
 
 Restrictions:
-- Do not say "Summary" or "Output".
 - Do not engage in any conversation.
 - Only describe the provided C++ function.
-- Start directly with the summary, with no precursors.
+
+Code:
+{code}
+
+Summary:
 """
 
+QUESTION_PROMPT_TEMPLATE = """
+You are an expert C++ developer. Answer the following question based on the given code. Provide a detailed and specific answer.
+
+Code:
+{code}
+
+Question:
+{question}
+
+Answer:
+"""
+
+userOption = sys.argv[2]
+print(userOption)
+if userOption == "Ask a question":
+    userQuestion = sys.argv[3]
+    prompt = QUESTION_PROMPT_TEMPLATE.format(code=contents, question=userQuestion)
+    print("Question: " + userQuestion)
+else:
+    prompt = SUMMARIZE_CODE_PROMPT_TEMPLATE.format(code=contents)
+    print("Here is a summary of this code: ")
+
 qa = create_retrieval_chain(retriever_chain, document_chain)
-request = contents + "\n" + SUMMARIZE_CODE_PROMPT
-result = qa.invoke({"input": request})
-print(result)
+# request = contents + "\n" + SUMMARIZE_CODE_PROMPT
+result = qa.invoke({"input": prompt})
+print(result['answer'])
+

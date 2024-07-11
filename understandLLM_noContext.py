@@ -5,7 +5,7 @@ import os;
 from langchain_huggingface import HuggingFaceEndpoint
 
 os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
-llm = HuggingFaceEndpoint(
+llmHUGGINGFACE = HuggingFaceEndpoint(
     repo_id="HuggingFaceH4/zephyr-7b-beta",
     task="text-generation",
     temperature= 0.1,
@@ -14,28 +14,32 @@ llm = HuggingFaceEndpoint(
     repetition_penalty= 1.03
 )
 
-######################################
+### FOR RUNNING WITH OPENAI ###
+
+# import os
+# os.environ["OPENAI_API_KEY"] = ""
+# from langchain_openai import OpenAI
+# llmOPENAI = OpenAI(openai_api_key="OPENAP_API_KEY", openai_organization="proj_RRvxgAHHyE2h3ZOVM07xZGIZ")
 
 ##### FOR RUNNING WITH LLAMAFILE #####
 
-# llm = Llamafile()
-
-#####################################
+# from langchain_community.llms.llamafile import Llamafile
+# llmLLAMAFILE = Llamafile()
 
 #### FOR RUNNING WITH LLAMACPP #####
 
-# from langchain_community.llms import LlamaCpp
-# from langchain_core.callbacks import CallbackManager, StreamingStdOutCallbackHandler
-# from langchain_core.prompts import PromptTemplate    
-# callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+from langchain_community.llms import LlamaCpp
+from langchain_core.callbacks import CallbackManager, StreamingStdOutCallbackHandler
+from langchain_core.prompts import PromptTemplate    
+callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
-# zephr_path = "/Users/adelinemoll/Documents/LLM/LangChain/zephyr-7b-beta.Q2_K.gguf" # Mac Path
+zephr_path = "/Users/adelinemoll/Documents/LLM/zephyr-7b-beta.Q2_K.gguf" # Mac Path
 # zephr_path = "/home/adelinemoll/Public/LLM/zephyr-7b-beta.Q2_K.gguf" # Linux Path
-# llm = LlamaCpp(model_path=zephr_path, verbose=True, n_ctx=4096, callback_manager=callback_manager)
+llmLLAMACPP = LlamaCpp(model_path=zephr_path, verbose=False, n_ctx=4096)
 
 #####################################
 
-userQuestion = sys.argv[1]
+
 
 contents = []
 while True:
@@ -47,22 +51,45 @@ while True:
 
 contents= '\n'.join(contents)
 
-SUMMARIZE_CODE_PROMPT = """
-    Generate a concise summary of the provided C++ code. Keep the summary to 5 sentences or less. 
+SUMMARIZE_CODE_PROMPT_TEMPLATE = """
+Generate a concise summary of the provided C++ code. Keep the summary to 5 sentences or less. 
 
-    Instructions: 
-    - Provide one paragraph.
-    - Use 5 sentences or less.
-    - Describe dependencies, important functions and classes, and relevant information from comments.
+Instructions: 
+- Provide one paragraph.
+- Use 5 sentences or less.
+- Describe dependencies, important functions and classes, and relevant information from comments.
 
-    Restrictions:
-    - Do not say "Summary" or "Output".
-    - Do not engage in any conversation.
-    - Only describe the provided C++ code.
-    - Start directly with the summary, with no precursors.
-    """
+Restrictions:
+- Do not engage in any conversation.
+- Only describe the provided C++ code.
 
-contents = contents + "\n" + SUMMARIZE_CODE_PROMPT
-result = llm.invoke(contents)
-print("Question: " + userQuestion)
+Code:
+{code}
+
+Summary:
+"""
+
+QUESTION_PROMPT_TEMPLATE = """
+You are an expert C++ developer. Answer the following question based on the given code. Provide a detailed and specific answer.
+
+Code:
+{code}
+
+Question:
+{question}
+
+Answer:
+"""
+
+userOption = sys.argv[1]
+if userOption == "Ask a question":
+    userQuestion = sys.argv[2]
+    prompt = QUESTION_PROMPT_TEMPLATE.format(code=contents, question=userQuestion)
+    print("Question: " + userQuestion)
+else:
+    prompt = SUMMARIZE_CODE_PROMPT_TEMPLATE.format(code=contents)
+    print("Here is a summary of this code: ")
+
+# result = llmLLAMACPP.invoke(contents)
+result = llmHUGGINGFACE.invoke(prompt)
 print("LLM Response: " + result)
