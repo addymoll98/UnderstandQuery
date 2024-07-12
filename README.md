@@ -15,6 +15,8 @@ pip install sentence-transformers
 ```
 (There may be some missing packages in this list, troubleshoot based on errors)
 
+To use HuggingFace, create a Hugging Face Read-only API token, and set HUGGINGFACEHUB_API_TOKEN as an enviroment variable. 
+
 ## Setting up Understand
 
 If you want to be able to use both the "with context" and "without context" tools, you will need to add two seperate User Tools in Understand.

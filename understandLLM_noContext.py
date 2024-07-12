@@ -5,6 +5,7 @@
 
 from langchain_huggingface import HuggingFaceEndpoint
 
+from langchain_huggingface import HuggingFaceEndpoint
 llm = HuggingFaceEndpoint(
     repo_id="HuggingFaceH4/zephyr-7b-beta",
     task="text-generation",
