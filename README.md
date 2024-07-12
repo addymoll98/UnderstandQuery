@@ -12,6 +12,8 @@ pip install langchain-community
 pip install langchain-core
 pip install chromadb
 pip install sentence-transformers
+pip install tree-sitter==0.21.3 tree-sitter-languages
+
 ```
 (There may be some missing packages in this list, troubleshoot based on errors)
 

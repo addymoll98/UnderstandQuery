@@ -1,3 +1,5 @@
+from langchain_huggingface import HuggingFaceEmbeddings
+
 # Get the Repo Path from Understand
 import sys
 repo_path = sys.argv[1]
@@ -41,9 +43,6 @@ retriever = db.as_retriever(
 
 ### FOR RUNNING WITH HUGGINGFACE ###
 
-import os
-print(os.getenv('HUGGINGFACEHUB_API_TOKEN'))
-
 from langchain_huggingface import HuggingFaceEndpoint
 llm = HuggingFaceEndpoint(
     repo_id="HuggingFaceH4/zephyr-7b-beta",
@@ -53,8 +52,6 @@ llm = HuggingFaceEndpoint(
     max_new_tokens= 512,
     repetition_penalty= 1.03
 )
-
-print(os.getenv('HUGGINGFACEHUB_API_TOKEN'))
 
 ##### FOR RUNNING WITH LLAMAFILE #####
 
