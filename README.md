@@ -13,6 +13,7 @@ pip install langchain-core
 pip install chromadb
 pip install sentence-transformers
 pip install tree-sitter==0.21.3 tree-sitter-languages
+pip install langchain_huggingface
 
 ```
 (There may be some missing packages in this list, troubleshoot based on errors)
@@ -40,6 +41,8 @@ Add the following information:
 ## Usage
 
 To use these programs, you'll need to either use the HuggingFace API (this means that you're not running locally), or set up Llamafile or Llamacpp. There is code for all three options, you just need to toggle comments to switch between which LLM option you want to use. 
+
+When using llamafile, you need to download a Llamafile model (will have .llamafile as an extention), and before running the program, you need to start up llamafile running that executable (for example, on linux  in the terminal: $./mistral-7b-instruct-v0.2.Q4_K_M.llamafile)
 
 Within Understand, highlight a snippet of code you'd like to use with the LLM. Right click, and select User Tools > Your Tool Name.
 There will be a pop-up box that asks you to select either "Generate a summary" or "Ask a question". Note that the text box "Enter your question" will be present for both options, but the question that you type is only used for "Ask a question" and any text entered there is ignored if you select "Generate a summary". 

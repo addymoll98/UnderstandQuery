@@ -1,3 +1,7 @@
+# Start a timer when the program begins
+import time
+start_time = time.time()
+
 from langchain_huggingface import HuggingFaceEmbeddings
 
 # Get the Repo Path from Understand
@@ -12,7 +16,7 @@ from langchain.text_splitter import Language, RecursiveCharacterTextSplitter
 loader = GenericLoader.from_filesystem(
     repo_path,
     glob="**/*",
-    suffixes=[".cpp", ".hpp"],  # Update to match C++ file extensions
+    suffixes=[".cpp", ".hpp", ".md"],  # Update to match C++ file extensions
     exclude=[],
     parser=LanguageParser(language=Language.CPP, parser_threshold=500),  # Update to use CPP language parser
 )
@@ -34,6 +38,13 @@ if len(all_embeddings) != len(texts):
     raise ValueError("Mismatch between the number of embeddings and text chunks.")
 
 # Create Chroma DB
+
+# WHEN RUNNING ON THE LINUX, YOU NEED THESE THREE LINES
+# ALSO, use python3, which is at /usr/local/bin/python3
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
 from langchain_community.vectorstores import Chroma
 db = Chroma.from_documents(texts, embeddings)
 retriever = db.as_retriever(
@@ -41,29 +52,38 @@ retriever = db.as_retriever(
     search_kwargs={"k": 8},
 )
 
+# Calculate and print elapsed time to respond
+response_start_time = time.time()
+print("Time to load embeddings: ", response_start_time-start_time, " seconds")
+
 ### FOR RUNNING WITH HUGGINGFACE ###
 
-from langchain_huggingface import HuggingFaceEndpoint
-llm = HuggingFaceEndpoint(
-    repo_id="HuggingFaceH4/zephyr-7b-beta",
-    task="text-generation",
-    temperature= 0.1,
-    top_k= 30,
-    max_new_tokens= 512,
-    repetition_penalty= 1.03
-)
+# print("Running with HuggingFace")
+# from langchain_huggingface import HuggingFaceEndpoint
+# from langchain_huggingface import HuggingFaceEndpoint
+# llm = HuggingFaceEndpoint(
+#     repo_id="HuggingFaceH4/zephyr-7b-beta",
+#     task="text-generation",
+#     temperature= 0.1,
+#     top_k= 30,
+#     max_new_tokens= 512,
+#     repetition_penalty= 1.03
+# )
 
 ##### FOR RUNNING WITH LLAMAFILE #####
 
+# print("Running with LlamaFile")
 # from langchain_community.llms.llamafile import Llamafile
 # llm = Llamafile()
 
 #### FOR RUNNING WITH LLAMACPP #####
 
-# from langchain_community.llms import LlamaCpp
+print("Running with LlamaCpp")
+from langchain_community.llms import LlamaCpp
 # zephr_path = "/Users/adelinemoll/Documents/LLM/zephyr-7b-beta.Q2_K.gguf" # Mac Path, REPLACE WITH YOUR PATH TO YOUR LOCAL LLM MODEL
-# # zephr_path = "/home/adelinemoll/Public/LLM/zephyr-7b-beta.Q2_K.gguf" # Linux Path
-# llm = LlamaCpp(model_path=zephr_path, verbose=False, n_ctx=4096)
+zephr_path = "/home/adelinemoll/Public/LLM/zephyr-7b-beta.Q2_K.gguf" # Linux Path
+deepseek_path = "/home/adelinemoll/Public/LLM/deepseek-coder-v2-lite-instruct-q4_k_m.gguf" # Linux Path
+llm = LlamaCpp(model_path=deepseek_path, verbose=False, n_ctx=4096)
 
 #####################################
 
@@ -161,7 +181,13 @@ else:
 # Create a chain that combines the retreiver_chain and document_chain
 qa = create_retrieval_chain(retriever_chain, document_chain)
 
+
 # Invoke the LLM and print the response
 result = qa.invoke({"input": prompt})
-print(result['answer'])
+print(result['answer']) # If using HuggingFace
+# print(result) # If using LlamaCpp
 
+# Calculate and print elapsed time to respond
+end_time = time.time()
+print("Model Response Time: ", end_time-response_start_time, " seconds")
+print("Total time: ", end_time-start_time, " seconds")

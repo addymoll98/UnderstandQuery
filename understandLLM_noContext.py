@@ -1,33 +1,38 @@
+# Start a timer when the program begins
+import time
+start_time = time.time()
+
 # You can run this program with HuggingFace (not local), Llamafile, or Llamacpp (both local)
 # Toggle between the below comments to switch between models
 
 ### FOR RUNNING WITH HUGGINGFACE ###
 
-from langchain_huggingface import HuggingFaceEndpoint
-
-from langchain_huggingface import HuggingFaceEndpoint
-llm = HuggingFaceEndpoint(
-    repo_id="HuggingFaceH4/zephyr-7b-beta",
-    task="text-generation",
-    temperature= 0.1,
-    top_k= 30,
-    max_new_tokens= 512,
-    repetition_penalty= 1.03
-)
+# print("Running with HuggingFace")
+# from langchain_huggingface import HuggingFaceEndpoint
+# from langchain_huggingface import HuggingFaceEndpoint
+# llm = HuggingFaceEndpoint(
+#     repo_id="HuggingFaceH4/zephyr-7b-beta",
+#     task="text-generation",
+#     temperature= 0.1,
+#     top_k= 30,
+#     max_new_tokens= 512,
+#     repetition_penalty= 1.03
+# )
 
 ##### FOR RUNNING WITH LLAMAFILE #####
 
+# print("Running with LlamaFile")
 # from langchain_community.llms.llamafile import Llamafile
-
 # llm = Llamafile()
 
 #### FOR RUNNING WITH LLAMACPP #####
 
-# from langchain_community.llms import LlamaCpp
-
+print("Running with LlamaCpp")
+from langchain_community.llms import LlamaCpp
 # zephr_path = "/Users/adelinemoll/Documents/LLM/zephyr-7b-beta.Q2_K.gguf" # Mac Path, REPLACE WITH YOUR PATH TO YOUR LOCAL LLM MODEL
-# # zephr_path = "/home/adelinemoll/Public/LLM/zephyr-7b-beta.Q2_K.gguf" # Linux Path
-# llm = LlamaCpp(model_path=zephr_path, verbose=False, n_ctx=4096)
+zephr_path = "/home/adelinemoll/Public/LLM/zephyr-7b-beta.Q2_K.gguf" # Linux Path
+deepseek_path = "/home/adelinemoll/Public/LLM/deepseek-coder-v2-lite-instruct-q4_k_m.gguf" # Linux Path
+llm = LlamaCpp(model_path=deepseek_path, verbose=False, n_ctx=4096)
 
 #####################################
 
@@ -87,3 +92,7 @@ else:
 # Invoke the LLM and print the response
 result = llm.invoke(prompt)
 print("LLM Response: " + result)
+
+# Calculate and print elapsed time
+end_time = time.time()
+print("Total time: ", end_time-start_time, " seconds")
