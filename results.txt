@@ -1,0 +1,83 @@
+class CollectTrainingData(object):
+    
+    def __init__(self, host, port, serial_port, input_size):
+
+        self.server_socket = socket.socket()
+        self.server_socket.bind((host, port))
+        self.server_socket.listen(0)
+
+        # accept a single connection
+        self.connection = self.server_socket.accept()[0].makefile('rb')
+
+        # connect to a seral port
+        self.ser = serial.Serial(serial_port, 115200, timeout=1)
+        self.send_inst = True
+
+        self.input_size = input_size
+
+        # create labels
+        self.k = np.zeros((4, 4), 'float')
+        for i in range(4):
+            self.k[i, i] = 1
+
+        pygame.init()
+        pygame.display.set_mode((250, 250))
+
+
+Understand > No Context
+
+Running with LlamaCpp
+Here is a summary of this code: 
+LLM Response: This code initializes a server socket to accept connections and handle data transmission. It also sets up communication with a serial port for sensor data acquisition. The script includes functionalities like creating labels, initializing matrices, and setting up graphical interfaces using PyGame for visualization purposes.
+Total time:  75.33850502967834  seconds
+
+Running with LlamaCpp
+Question: What exceptions can be thrown by this segment of code?
+LLM Response: This segment of code can throw several types of exceptions depending on the context in which it is executed. Below are some common exceptions that might be encountered:
+
+1. **Socket-related Exceptions:**
+   - `socket.error`: Raised when an error occurs with the socket operations, such as binding to a port or accepting connections.
+   - `ConnectionRefusedError`: Raised when attempting to connect to a service that is unavailable or refused connection attempts.
+
+2. **Serial Communication Exceptions:**
+   - `serial.SerialException`: Raised when there is an error related to serial communication, such as failing to open the port or set parameters.
+
+3. **General Programming Errors:**
+   - `IndexError`: Raised when attempting to access an index of a list that does not exist (e.g., accessing an element in a list using an index that is out of range).
+   - `KeyError`: Raised when trying to access a key from a dictionary that doesn't exist.
+
+4. **User Interface Exceptions:**
+   - `pygame.error`: Raised by Pygame functions when there is an error in the game state or input handling.
+
+These exceptions
+Total time:  100.57197737693787  seconds
+
+Understand > With Context
+
+Repo Path: C:\Users\Public\LLM\LangChain\rccar_repo
+Time to load embeddings:  18.70883798599243  seconds
+Running with LlamaCpp
+Number of requested results 20 is greater than number of elements in index 15, updating n_results = 15
+Here is a summary of this code: 
+This function initializes a server socket and accepts connections from clients, sets up communication with a serial port, and initializes necessary variables for image processing tasks. It also sets up a display window using Pygame for visual output.
+Model Response Time:  77.6702868938446  seconds
+Total time:  96.37912487983704  seconds
+
+Time to load embeddings:  18.091652393341064  seconds
+Running with LlamaCpp
+Number of requested results 20 is greater than number of elements in index 15, updating n_results = 15
+Question: What exceptions can be thrown by this segment of code?
+The provided code snippet contains several potential sources of exceptions that could lead to runtime errors or failures in the application's execution flow. Here are some specific types of exceptions and situations where they might occur within the given code snippet:
+
+1. **Socket-Related Exceptions**: The code attempts to create a socket, bind it to a host/port combination, listen for incoming connections, and accept connections from clients. Any of these steps could potentially fail due to network issues, permission issues, or other configuration errors. For example:
+   - `socket.error` if the socket creation fails.
+   - `OSError` if there are problems binding to a port or listening on an address.
+   - `ConnectionError` if accepting connections times out or is refused by the server.
+
+2. **Serial Communication Issues**: The code attempts to open and configure a serial connection using the PySerial library. Potential issues include:
+   - `serial.SerialException` if there are problems opening, configuring, or communicating with the serial port.
+
+3. **General Programming Errors**: There may be logical errors in the code that could lead to runtime exceptions, such as accessing out-of-bounds arrays, dividing by zero, or attempting to perform
+Model Response Time:  100.66648292541504  seconds
+Total time:  118.7581353187561  seconds
+
